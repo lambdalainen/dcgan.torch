@@ -3,4 +3,4 @@
 - quantization/ contains quantization results
 - bedrooms_new.t7 is saved by the latest version of torch from bedrooms_4_net_G.t7,
   which can be imported to pytorch
-- gcc -Wall test.c
+- gcc -Wall col2im.c gemm.c test.c
