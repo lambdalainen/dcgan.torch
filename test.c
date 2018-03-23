@@ -169,11 +169,20 @@ static void layer_2(
   }
 }
 
-#if 0
-static void layer_3(void)
+static void layer_3(
+    float *input,
+    float *output,
+    long size)
 {
+    float *p, *q;
+    for (p = input, q = output;
+         p < (input + size) && q < (output + size);
+         p++, q++) {
+        *q = *p > 0 ? *p : 0;
+    }
 }
 
+#if 0
 static void layer_4(void)
 {
 }
@@ -284,6 +293,25 @@ int main(void)
     free(weight_2);
     free(bias_2);
 
+
+
+    // (64, 512, 4, 4)
+    float *input_3 = output_2;
+    // (64, 512, 4, 4)
+    float *output_3 = calloc(64 * 512 * 4 * 4, sizeof(float));
+
+    layer_3(input_3, output_3, 64 * 512 * 4 * 4);
+
+    fp = fopen("bin/output_3_test.bin", "wb");
+    fwrite(output_3, sizeof(float), 64 * 512 * 4 * 4, fp);
+    fclose(fp);
+
+    free(input_3);
+
+
+
+    // (64, 512, 4, 4)
+    float *input_4 = output_3;
     // float *weight_4;
     // float *weight_7;
     // float *weight_10;
