@@ -145,7 +145,6 @@ static void layer_14(void)
 
 int main(void)
 {
-
     // (64, 100, 1, 1)
     float *input_1 = calloc(64 * 100, sizeof(float));
     // (64, 512, 4, 4)
@@ -158,8 +157,24 @@ int main(void)
     // THTensor_(resize2d)(columns, nOutputPlane*kW*kH, inputHeight*inputWidth);
     float *columns_1 = calloc(8192, sizeof(float));
 
+    FILE *fp = fopen("bin/input_1.bin", "rb");
+    fread(input_1, sizeof(float), 64 * 100, fp);
+    fclose(fp);
+
+    fp = fopen("bin/weight_1.bin", "rb");
+    fread(weight_1, sizeof(float), 100 * 512 * 4 * 4, fp);
+    fclose(fp);
+
+    fp = fopen("bin/bias_1.bin", "rb");
+    fread(bias_1, sizeof(float), 512, fp);
+    fclose(fp);
+
     layer_1(input_1, output_1, weight_1, bias_1, columns_1,
             4, 4, 1, 1, 0, 0, 100, 512, 1, 1, 64);
+
+    fp = fopen("bin/output_1_test.bin", "wb");
+    fwrite(output_1, sizeof(float), 64 * 512 * 4 * 4, fp);
+    fclose(fp);
 
     // float *weight_4;
     // float *weight_7;
