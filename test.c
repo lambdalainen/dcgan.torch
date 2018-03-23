@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "gemm.h"
@@ -38,7 +39,7 @@ static void layer_1(
   float *output_n;
 
   for (int elt = 0; elt < batchSize; elt++) {
-    printf("elt %i\n", elt);
+    //printf("elt %i\n", elt);
     // Matrix mulitply per output:
     // Note: input + 1 means addr + sizeof(float)
     input_n = input + elt * nInputPlane * inputHeight * inputWidth;
@@ -60,7 +61,7 @@ static void layer_1(
         0,
         columns, n
     );
-    printf("after gemm, output %p, output_n %p\n", output, output_n);
+    //printf("after gemm, output %p, output_n %p\n", output, output_n);
 
     // Unpack columns back into input:
     col2im(
@@ -89,11 +90,86 @@ static void layer_1(
   free(ones);
 }
 
-#if 0
-static void layer_2(void)
+static void layer_2(
+  float *input,
+  float *output,
+  float *weight,
+  float *bias,
+  //float *running_mean,
+  //float *running_var
+  //float *save_mean,
+  //float *save_std,
+  int nInputPlane, // input->size[1]
+  long inputWidth,
+  long inputHeight,
+  long batchSize)
 {
+  //double momentum = 0.1;
+  double eps = 0.00001;
+  long nOutputPlane = nInputPlane;
+  long n = batchSize * inputWidth * inputHeight;
+  long input_plane_stride = inputWidth * inputHeight;
+  long output_plane_stride = input_plane_stride;
+
+  // The input dimensions are: (batchSize, nInputPlane, kW, kH), the output has the same dimensions.
+  // Now we are looping through nInputPlane instead of batchSize, therefore we can't simply use
+  // a pointer to point to a continuous memory.
+  for (long f = 0; f < nInputPlane; ++f) {
+    float *in = input + f * input_plane_stride;
+    float *out = output + f * output_plane_stride;
+
+    float mean, invstd;
+
+    // compute mean per input
+    // torch: if real = float, accreal = double
+    double sum = 0;
+    for (int i = 0; i < batchSize; i++) {
+        float *plane_ptr = in + i * nInputPlane * input_plane_stride;
+        for (float *p = plane_ptr; p < (plane_ptr + input_plane_stride); p++)
+            sum += *p;
+    }
+
+    mean = (float) sum / n;
+    //THTensor_(set1d)(save_mean, f, (float) mean);
+
+    // compute variance per input
+    sum = 0;
+    for (int i = 0; i < batchSize; i++) {
+        float *plane_ptr = in + i * nInputPlane * input_plane_stride;
+        for (float *p = plane_ptr; p < (plane_ptr + input_plane_stride); p++)
+            sum += (*p - mean) * (*p - mean);
+    }
+
+    invstd = (float) (1 / sqrt(sum/n + eps));
+    //THTensor_(set1d)(save_std, f, (float) invstd);
+
+    // update running averages
+    //THTensor_(set1d)(running_mean, f,
+    //  (float) (momentum * mean + (1 - momentum) * THTensor_(get1d)(running_mean, f)));
+
+    //double unbiased_var = sum / (n - 1);
+    //THTensor_(set1d)(running_var, f,
+    //  (float) (momentum * unbiased_var + (1 - momentum) * THTensor_(get1d)(running_var, f)));
+
+    // compute output
+    float w = *(weight + f);
+    float b = *(bias + f);
+
+    // write output
+    for (int i = 0; i < batchSize; i++) {
+        float *input_plane_ptr = in + i * nInputPlane * input_plane_stride;
+        float *output_plane_ptr = out + i * nOutputPlane * output_plane_stride;
+        float *p, *q;
+        for (p = input_plane_ptr, q = output_plane_ptr;
+             p < (input_plane_ptr + input_plane_stride) && q < (output_plane_ptr + output_plane_stride);
+             p++, q++) {
+            *q = (float) (((*p - mean) * invstd) * w + b);
+        }
+    }
+  }
 }
 
+#if 0
 static void layer_3(void)
 {
 }
@@ -160,11 +236,9 @@ int main(void)
     FILE *fp = fopen("bin/input_1.bin", "rb");
     fread(input_1, sizeof(float), 64 * 100, fp);
     fclose(fp);
-
     fp = fopen("bin/weight_1.bin", "rb");
     fread(weight_1, sizeof(float), 100 * 512 * 4 * 4, fp);
     fclose(fp);
-
     fp = fopen("bin/bias_1.bin", "rb");
     fread(bias_1, sizeof(float), 512, fp);
     fclose(fp);
@@ -175,6 +249,40 @@ int main(void)
     fp = fopen("bin/output_1_test.bin", "wb");
     fwrite(output_1, sizeof(float), 64 * 512 * 4 * 4, fp);
     fclose(fp);
+
+    free(input_1);
+    free(weight_1);
+    free(bias_1);
+    free(columns_1);
+
+
+
+    // (64, 512, 4, 4)
+    float *input_2 = output_1;
+    // (64, 512, 4, 4)
+    float *output_2 = calloc(64 * 512 * 4 * 4, sizeof(float));
+    // (512)
+    float *weight_2 = calloc(512, sizeof(float));
+    // (512)
+    float *bias_2 = calloc(512, sizeof(float));
+
+    fp = fopen("bin/weight_2.bin", "rb");
+    fread(weight_2, sizeof(float), 512, fp);
+    fclose(fp);
+    fp = fopen("bin/bias_2.bin", "rb");
+    fread(bias_2, sizeof(float), 512, fp);
+    fclose(fp);
+
+    layer_2(input_2, output_2, weight_2, bias_2,
+            512, 4, 4, 64);
+
+    fp = fopen("bin/output_2_test.bin", "wb");
+    fwrite(output_2, sizeof(float), 64 * 512 * 4 * 4, fp);
+    fclose(fp);
+
+    free(input_2);
+    free(weight_2);
+    free(bias_2);
 
     // float *weight_4;
     // float *weight_7;
