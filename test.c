@@ -206,10 +206,8 @@ static void Tanh(
 }
 
 static float *forward_SpatialFullConvolution(
+    int layer,
     float *input,
-    char *weight_path,
-    char *bias_path,
-    char *output_path,
     long batchSize,
     long nInputPlane,
     long inputWidth,
@@ -222,6 +220,13 @@ static float *forward_SpatialFullConvolution(
     int padW,
     int padH)
 {
+    char weight_path[256];
+    char bias_path[256];
+    char output_path[256];
+    sprintf(weight_path, "bin/weight_%i.bin", layer);
+    sprintf(bias_path, "bin/bias_%i.bin", layer);
+    sprintf(output_path, "bin/outout_%i_test.bin", layer);
+
     long outputHeight = (inputHeight - 1) * dH - 2*padH + (dilationH * (kH - 1) + 1);
     long outputWidth  = (inputWidth - 1) * dW - 2*padW + (dilationW * (kW - 1) + 1);
     long output_size = batchSize * nOutputPlane * outputWidth * outputHeight;
@@ -257,15 +262,20 @@ static float *forward_SpatialFullConvolution(
 }
 
 static float *forward_SpatialBatchNormalization(
+    int layer,
     float *input,
-    char *weight_path,
-    char *bias_path,
-    char *output_path,
     long batchSize,
     long nInputPlane,
     long inputWidth,
     long inputHeight)
 {
+    char weight_path[256];
+    char bias_path[256];
+    char output_path[256];
+    sprintf(weight_path, "bin/weight_%i.bin", layer);
+    sprintf(bias_path, "bin/bias_%i.bin", layer);
+    sprintf(output_path, "bin/outout_%i_test.bin", layer);
+
     // (64, 512, 4, 4)
     // same shape for input and output
     long output_size = batchSize * nInputPlane * inputWidth * inputHeight;
@@ -297,13 +307,16 @@ static float *forward_SpatialBatchNormalization(
 }
 
 static float *forward_ReLU(
+    int layer,
     float *input,
-    char *output_path,
     long batchSize,
     long nInputPlane,
     long inputWidth,
     long inputHeight)
 {
+    char output_path[256];
+    sprintf(output_path, "bin/outout_%i_test.bin", layer);
+
     long output_size = batchSize * nInputPlane * inputWidth * inputHeight;
     float *output = calloc(output_size, sizeof(float));
 
@@ -318,13 +331,16 @@ static float *forward_ReLU(
 }
 
 static float *forward_Tanh(
+    int layer,
     float *input,
-    char *output_path,
     long batchSize,
     long nInputPlane,
     long inputWidth,
     long inputHeight)
 {
+    char output_path[256];
+    sprintf(output_path, "bin/outout_%i_test.bin", layer);
+
     long output_size = batchSize * nInputPlane * inputWidth * inputHeight;
     float *output = calloc(output_size, sizeof(float));
 
@@ -340,98 +356,61 @@ static float *forward_Tanh(
 
 int main(void)
 {
-    /* ----- (1): nn.SpatialFullConvolution(100 -> 512, 4x4) ----- */
-
-    // (64, 100, 1, 1) -> (64, 512, 4, 4)
     float *input_1 = calloc(64 * 100, sizeof(float));
     FILE *fp = fopen("bin/input_1.bin", "rb");
     fread(input_1, sizeof(float), 64 * 100, fp);
     fclose(fp);
 
+    // (64, 100, 1, 1) -> (64, 512, 4, 4)
     float *output_1 = forward_SpatialFullConvolution(
-        input_1, "bin/weight_1.bin", "bin/bias_1.bin", "bin/output_1_test.bin",
-        64, 100, 1, 1, 512, 4, 4, 1, 1, 0, 0);
-
-    /* ----- (2): nn.SpatialBatchNormalization (4D) (512) ----- */
+        1, input_1, 64, 100, 1, 1, 512, 4, 4, 1, 1, 0, 0);
 
     // (64, 512, 4, 4) -> (64, 512, 4, 4)
     float *output_2 = forward_SpatialBatchNormalization(
-        output_1, "bin/weight_2.bin", "bin/bias_2.bin", "bin/output_2_test.bin",
-        64, 512, 4, 4);
-
-    /* ----- (3): nn.ReLU ----- */
+        2, output_1, 64, 512, 4, 4);
 
     // (64, 512, 4, 4) -> (64, 512, 4, 4)
-    float *output_3 = forward_ReLU(output_2, "bin/output_3_test.bin", 64, 512, 4, 4);
-
-    /* ----- (4): nn.SpatialFullConvolution(512 -> 256, 4x4, 2,2, 1,1) ----- */
+    float *output_3 = forward_ReLU(3, output_2, 64, 512, 4, 4);
 
     // (64, 512, 4, 4) -> (64, 256, 8, 8)
     float *output_4 = forward_SpatialFullConvolution(
-        output_3, "bin/weight_4.bin", "bin/bias_4.bin", "bin/output_4_test.bin",
-        64, 512, 4, 4, 256, 4, 4, 2, 2, 1, 1);
-
-    /* ----- (5): nn.SpatialBatchNormalization (4D) (256) ----- */
+        4, output_3, 64, 512, 4, 4, 256, 4, 4, 2, 2, 1, 1);
 
     // (64, 256, 8, 8) -> (64, 256, 8, 8)
     float *output_5 = forward_SpatialBatchNormalization(
-        output_4, "bin/weight_5.bin", "bin/bias_5.bin", "bin/output_5_test.bin",
-        64, 256, 8, 8);
-
-    /* ----- (6): nn.ReLU ----- */
+        5, output_4, 64, 256, 8, 8);
 
     // (64, 256, 8, 8) -> (64, 256, 8, 8)
-    float *output_6 = forward_ReLU(output_5, "bin/output_6_test.bin", 64, 256, 8, 8);
-
-    /* ----- (7): nn.SpatialFullConvolution(256 -> 128, 4x4, 2,2, 1,1) ----- */
+    float *output_6 = forward_ReLU(6, output_5, 64, 256, 8, 8);
 
     // (64, 256, 8, 8) -> (64, 128, 16, 16)
     float *output_7 = forward_SpatialFullConvolution(
-        output_6, "bin/weight_7.bin", "bin/bias_7.bin", "bin/output_7_test.bin",
-        64, 256, 8, 8, 128, 4, 4, 2, 2, 1, 1);
-
-    /* ----- (8): nn.SpatialBatchNormalization (4D) (128) ----- */
+        7, output_6, 64, 256, 8, 8, 128, 4, 4, 2, 2, 1, 1);
 
     // (64, 128, 16, 16) -> (64, 128, 16, 16)
     float *output_8 = forward_SpatialBatchNormalization(
-        output_7, "bin/weight_8.bin", "bin/bias_8.bin", "bin/output_8_test.bin",
-        64, 128, 16, 16);
-
-    /* ----- (9): nn.ReLU ----- */
+        8, output_7, 64, 128, 16, 16);
 
     // (64, 128, 16, 16) -> (64, 128, 16, 16)
-    float *output_9 = forward_ReLU(output_8, "bin/output_9_test.bin", 64, 128, 16, 16);
-
-    /* ----- (10): nn.SpatialFullConvolution(128 -> 64, 4x4, 2,2, 1,1) ----- */
+    float *output_9 = forward_ReLU(9, output_8, 64, 128, 16, 16);
 
     // (64, 128, 16, 16) -> (64, 64, 32, 32)
     float *output_10 = forward_SpatialFullConvolution(
-        output_9, "bin/weight_10.bin", "bin/bias_10.bin", "bin/output_10_test.bin",
-        64, 128, 16, 16, 64, 4, 4, 2, 2, 1, 1);
-
-    /* ----- (11): nn.SpatialBatchNormalization (4D) (64) ----- */
+        10, output_9, 64, 128, 16, 16, 64, 4, 4, 2, 2, 1, 1);
 
     // (64, 64, 32, 32) -> (64, 64, 32, 32)
     float *output_11 = forward_SpatialBatchNormalization(
-        output_10, "bin/weight_11.bin", "bin/bias_11.bin", "bin/output_11_test.bin",
-        64, 64, 32, 32);
-
-    /* ----- (12): nn.ReLU ----- */
+        11, output_10, 64, 64, 32, 32);
 
     // (64, 64, 32, 32) -> (64, 64, 32, 32)
-    float *output_12 = forward_ReLU(output_11, "bin/output_12_test.bin", 64, 64, 32, 32);
-
-    /* ----- (13): nn.SpatialFullConvolution(64 -> 3, 4x4, 2,2, 1,1) ----- */
+    float *output_12 = forward_ReLU(12, output_11, 64, 64, 32, 32);
 
     // (64, 64, 32, 32) -> (64, 3, 64, 64)
     float *output_13 = forward_SpatialFullConvolution(
-        output_12, "bin/weight_13.bin", "bin/bias_13.bin", "bin/output_13_test.bin",
-        64, 64, 32, 32, 3, 4, 4, 2, 2, 1, 1);
-
-    /* ----- (14): nn.Tanh ----- */
+        13, output_12, 64, 64, 32, 32, 3, 4, 4, 2, 2, 1, 1);
 
     // (64, 3, 64, 64) -> (64, 3, 64, 64)
-    float *output_14 = forward_Tanh(output_13, "bin/output_14_test.bin", 64, 3, 64, 64);
+    float *output_14 = forward_Tanh(14, output_13, 64, 3, 64, 64);
     free(output_14);
 
     return 0;
