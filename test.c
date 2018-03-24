@@ -204,7 +204,7 @@ static void Tanh(
     for (p = input, q = output;
          p < (input + size) && q < (output + size);
          p++, q++) {
-        *q = tanh(*p);
+        *q = tanhf(*p);
     }
     printf("tanh: first 5 outputs: ");
     for (int i = 0; i < 5; i++)
