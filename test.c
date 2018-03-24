@@ -87,6 +87,7 @@ static void SpatialFullConvolution(
     );
 
     // Do Bias after:
+#if 0
     long m_ = nOutputPlane;
     long n_ = outputHeight * outputWidth;
     long k_ = 1;
@@ -100,6 +101,7 @@ static void SpatialFullConvolution(
         1,
         output_n, n_
     );
+#endif
   }
 
   free(ones);
