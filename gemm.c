@@ -35,6 +35,7 @@ void gemm(char transa, char transb,
 
   {
     long i, j, l;
+#if 0
     if(!transa_ && !transb_)
     {
       float *a_ = a;
@@ -77,6 +78,7 @@ void gemm(char transa, char transb,
     }
     else if(!transa_ && transb_)
     {
+#endif
       float *a_ = a;
       for(i = 0; i < m; i++)
       {
@@ -94,6 +96,7 @@ void gemm(char transa, char transb,
         }
         a_++;
       }
+#if 0
     }
     else
     {
@@ -115,6 +118,7 @@ void gemm(char transa, char transb,
         a_ += lda;
       }
     }
+#endif
   }
 }
 
