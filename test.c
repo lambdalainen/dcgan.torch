@@ -51,7 +51,6 @@ static void SpatialFullConvolution(
   float *output_n;
 
   for (int elt = 0; elt < batchSize; elt++) {
-    //printf("elt %i\n", elt);
     // Matrix mulitply per output:
     // Note: input + 1 means addr + sizeof(float)
     input_n = input + elt * nInputPlane * inputHeight * inputWidth;
@@ -62,19 +61,20 @@ static void SpatialFullConvolution(
     // long m = weight->size[1] * weight->size[2] * weight->size[3];
     // long n = columns->size[1];
     // long k = weight->size[0];
-    long m = nOutputPlane * kW * kH;
-    long n = inputHeight * inputWidth;
+    // m and n seem to have been mistakenly swapped in the original code
+    long n = nOutputPlane * kW * kH;
+    long m = inputHeight * inputWidth;
     long k = nInputPlane;
 
     // Do GEMM (note: this is a bit confusing because gemm assumes column-major matrices)
     gemm(
         'n', 't',
-        n, m, k,
+        m, n, k,
         1,
-        input_n, n,
-        weight, m,
+        input_n, m,
+        weight, n,
         0,
-        columns, n
+        columns, m
     );
     //printf("after gemm, output %p, output_n %p\n", output, output_n);
 
