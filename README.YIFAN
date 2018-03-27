@@ -4,3 +4,13 @@
 - bedrooms_new.t7 is saved by the latest version of torch from bedrooms_4_net_G.t7,
   which can be imported to pytorch
 - gcc -Wall col2im.c gemm.c test.c
+
+Batch Normalization can be merged to the Convolutional layer since it's simply a
+linear tranformation. ReLU can be merged in the same computational unit.
+
+tanh(x) = (exp(x) - exp(-x)) / (exp(x) + exp(-x))
+        = (exp(2 * x) - 1) / (exp(2 * x) + 1)
+
+Can it be replaced with other activation functions?
+
+Anyway I guess we need to implement division efficiently.
