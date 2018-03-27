@@ -227,7 +227,7 @@ static float *forward_SpatialFullConvolution(
     char output_path[256];
     sprintf(weight_path, "bin/weight_%i.bin", layer);
     sprintf(bias_path, "bin/bias_%i.bin", layer);
-    sprintf(output_path, "bin/outout_%i_test.bin", layer);
+    sprintf(output_path, "bin/output_%i_test.bin", layer);
 
     long outputHeight = (inputHeight - 1) * dH - 2*padH + (dilationH * (kH - 1) + 1);
     long outputWidth  = (inputWidth - 1) * dW - 2*padW + (dilationW * (kW - 1) + 1);
@@ -276,7 +276,7 @@ static float *forward_SpatialBatchNormalization(
     char output_path[256];
     sprintf(weight_path, "bin/weight_%i.bin", layer);
     sprintf(bias_path, "bin/bias_%i.bin", layer);
-    sprintf(output_path, "bin/outout_%i_test.bin", layer);
+    sprintf(output_path, "bin/output_%i_test.bin", layer);
 
     // (64, 512, 4, 4)
     // same shape for input and output
@@ -317,7 +317,7 @@ static float *forward_ReLU(
     long inputHeight)
 {
     char output_path[256];
-    sprintf(output_path, "bin/outout_%i_test.bin", layer);
+    sprintf(output_path, "bin/output_%i_test.bin", layer);
 
     long output_size = batchSize * nInputPlane * inputWidth * inputHeight;
     float *output = calloc(output_size, sizeof(float));
@@ -341,7 +341,7 @@ static float *forward_Tanh(
     long inputHeight)
 {
     char output_path[256];
-    sprintf(output_path, "bin/outout_%i_test.bin", layer);
+    sprintf(output_path, "bin/output_%i_test.bin", layer);
 
     long output_size = batchSize * nInputPlane * inputWidth * inputHeight;
     float *output = calloc(output_size, sizeof(float));
