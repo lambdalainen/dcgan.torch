@@ -51,3 +51,6 @@ print("Kernel:", k)
 conv_1.weight = nn.Parameter(k)
 result = conv_1(Variable(b))
 print('Result:', result)
+print('This shows that the dilated convolution does not share the same kernel\n'+
+      'with the transposed convolution. In particular, they seem to be the reverse\n'+
+      'of each other. Anyway, it is the desired shape we wish to achieve.')
