@@ -1,0 +1,1 @@
+gcc -Wall col2im.c gemm.c TransposedConvolution.c
