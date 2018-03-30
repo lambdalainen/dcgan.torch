@@ -4,5 +4,4 @@
 *.t7
 *.out
 bin/
-csv/
 tags
