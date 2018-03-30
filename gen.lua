@@ -16,8 +16,9 @@ end
 noise:normal(0, 1)
 -- net:float() -- what does this do?
 
-local q = require 'quantize'
-net:quantize(q.fixed(1, 8))
+-- Still IEEE 754, but less precision
+-- local q = require 'quantize'
+-- net:quantize(q.fixed(1, 8))
 
 -- 64 x 3 x 64 x 64
 local images = net:forward(noise)
