@@ -89,18 +89,18 @@ static void SpatialFullConvolution(
 
     // Do Bias after:
 #if 1
-    long m_ = nOutputPlane;
-    long n_ = outputHeight * outputWidth;
+    long m_ = outputHeight * outputWidth;
+    long n_ = nOutputPlane;
     long k_ = 1;
 
     gemm(
         't', 'n',
-        n_, m_, k_,
+        m_, n_, k_,
         1,
         ones, k_,
         bias, k_,
         1,
-        output_n, n_
+        output_n, m_
     );
 #endif
   }
