@@ -31,6 +31,7 @@ static void SpatialFullConvolution(
 {
   spatial_full_conv_layer++;
 
+  // dilationH and dilationW are constant 1 for transposed convolution
   long outputHeight = (inputHeight - 1) * dH - 2*padH + (dilationH * (kH - 1) + 1);
   long outputWidth  = (inputWidth - 1) * dW - 2*padW + (dilationW * (kW - 1) + 1);
 
@@ -62,8 +63,8 @@ static void SpatialFullConvolution(
     // long n = columns->size[1];
     // long k = weight->size[0];
     // m and n seem to have been mistakenly swapped in the original code
-    long n = nOutputPlane * kW * kH;
     long m = inputHeight * inputWidth;
+    long n = nOutputPlane * kW * kH;
     long k = nInputPlane;
 
     // Do GEMM (note: this is a bit confusing because gemm assumes column-major matrices)
