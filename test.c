@@ -88,11 +88,11 @@ static void SpatialFullConvolution(
     );
 
     // Do Bias after:
-#if 1
     long m_ = outputHeight * outputWidth;
     long n_ = nOutputPlane;
     long k_ = 1;
 
+    // alpha * A * B + beta * C (alpha = beta = 1)
     gemm(
         't', 'n',
         m_, n_, k_,
@@ -100,9 +100,8 @@ static void SpatialFullConvolution(
         ones, k_,
         bias, k_,
         1,
-        output_n, m_
+        output_n, m_ // beta == 1: c[j*ldc+i] = beta*c[j*ldc+i]+alpha*sum;
     );
-#endif
   }
 
   free(ones);
