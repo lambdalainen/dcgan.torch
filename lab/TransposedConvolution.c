@@ -1,8 +1,19 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "../gemm.h"
-#include "../col2im.h"
+
+void gemm(int debug, char transa, char transb,
+          long m, long n, long k,
+          float alpha, float *a, long lda, float *b, long ldb,
+          float beta, float *c, long ldc);
+void col2im(int debug, const float* data_col, const int channels,
+            const int height, const int width,
+            const int output_height, const int output_width,
+            const int kernel_h, const int kernel_w,
+            const int pad_h, const int pad_w,
+            const int stride_h, const int stride_w,
+            const int dilation_h, const int dilation_w,
+            float* data_im);
 
 static int dilationW = 1;
 static int dilationH = 1;
@@ -64,7 +75,7 @@ static void SpatialFullConvolution(
 
     // Do GEMM (note: this is a bit confusing because gemm assumes column-major matrices)
     gemm(
-        'n', 't',
+        1, 'n', 't',
         m, n, k,
         1,
         input_n, m,
@@ -76,7 +87,7 @@ static void SpatialFullConvolution(
 
     // Unpack columns back into input:
     col2im(
-      columns,
+      1, columns,
       nOutputPlane, outputHeight, outputWidth, inputHeight, inputWidth, kH, kW, padH, padW, dH, dW,
       dilationH, dilationW,
       output_n

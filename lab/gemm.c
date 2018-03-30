@@ -1,7 +1,6 @@
 #include <stdio.h>
-#include "../gemm.h"
 
-void gemm(char transa, char transb,
+void gemm(int debug, char transa, char transb,
           long m, long n, long k,
           float alpha, float *a, long lda, float *b, long ldb,
           float beta, float *c, long ldc)
@@ -80,7 +79,8 @@ void gemm(char transa, char transb,
     else if(!transa_ && transb_)
     {
 #endif
-      printf("--- gemm: m %li, n %li, k %li, lda %li, ldb %li, ldc %li\n", m, n, k, lda, ldb, ldc);
+      if (debug)
+        printf("--- gemm: m %li, n %li, k %li, lda %li, ldb %li, ldc %li\n", m, n, k, lda, ldb, ldc);
       float *a_ = a;
       for(i = 0; i < m; i++)
       {
@@ -90,14 +90,17 @@ void gemm(char transa, char transb,
           float sum = 0;
           for(l = 0; l < k; l++)
           {
-            printf("--- gemm: i %li, j %li, l %li, l*lda %li, l*ldb %li, a_[l*lda] %.2f, b_[l*ldb] %.2f\n",
-                   i, j, l, l*lda, l*ldb, a_[l*lda], b_[l*ldb]);
+            if (debug) {
+              printf("--- gemm: i %li, j %li, l %li, l*lda %li, l*ldb %li, a_[l*lda] %.2f, b_[l*ldb] %.2f\n",
+                     i, j, l, l*lda, l*ldb, a_[l*lda], b_[l*ldb]);
+            }
             sum += a_[l*lda]*b_[l*ldb];
           }
           b_++;
 	  if (beta == 0)
           {
-            printf("--- gemm: j*ldc+i %li, sum %.2f\n", j*ldc+i, sum);
+            if (debug)
+              printf("--- gemm: j*ldc+i %li, sum %.2f\n", j*ldc+i, sum);
 	    c[j*ldc+i] = alpha*sum;
           }
 	  else
