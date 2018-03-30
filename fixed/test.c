@@ -31,6 +31,7 @@ static void SpatialFullConvolution(
 {
   spatial_full_conv_layer++;
 
+  // dilationH and dilationW are constant 1 for transposed convolution
   long outputHeight = (inputHeight - 1) * dH - 2*padH + (dilationH * (kH - 1) + 1);
   long outputWidth  = (inputWidth - 1) * dW - 2*padW + (dilationW * (kW - 1) + 1);
 
@@ -51,7 +52,6 @@ static void SpatialFullConvolution(
   float *output_n;
 
   for (int elt = 0; elt < batchSize; elt++) {
-    //printf("elt %i\n", elt);
     // Matrix mulitply per output:
     // Note: input + 1 means addr + sizeof(float)
     input_n = input + elt * nInputPlane * inputHeight * inputWidth;
@@ -62,19 +62,20 @@ static void SpatialFullConvolution(
     // long m = weight->size[1] * weight->size[2] * weight->size[3];
     // long n = columns->size[1];
     // long k = weight->size[0];
-    long m = nOutputPlane * kW * kH;
-    long n = inputHeight * inputWidth;
+    // m and n seem to have been mistakenly swapped in the original code
+    long m = inputHeight * inputWidth;
+    long n = nOutputPlane * kW * kH;
     long k = nInputPlane;
 
     // Do GEMM (note: this is a bit confusing because gemm assumes column-major matrices)
     gemm(
         'n', 't',
-        n, m, k,
+        m, n, k,
         1,
-        input_n, n,
-        weight, m,
+        input_n, m,
+        weight, n,
         0,
-        columns, n
+        columns, m
     );
     //printf("after gemm, output %p, output_n %p\n", output, output_n);
 
@@ -87,6 +88,7 @@ static void SpatialFullConvolution(
     );
 
     // Do Bias after:
+#if 0
     long m_ = nOutputPlane;
     long n_ = outputHeight * outputWidth;
     long k_ = 1;
@@ -100,6 +102,7 @@ static void SpatialFullConvolution(
         1,
         output_n, n_
     );
+#endif
   }
 
   free(ones);
@@ -225,7 +228,7 @@ static float *forward_SpatialFullConvolution(
     char output_path[256];
     sprintf(weight_path, "bin/weight_%i.bin", layer);
     sprintf(bias_path, "bin/bias_%i.bin", layer);
-    sprintf(output_path, "bin/outout_%i_test.bin", layer);
+    sprintf(output_path, "bin/output_%i_test.bin", layer);
 
     long outputHeight = (inputHeight - 1) * dH - 2*padH + (dilationH * (kH - 1) + 1);
     long outputWidth  = (inputWidth - 1) * dW - 2*padW + (dilationW * (kW - 1) + 1);
@@ -274,7 +277,7 @@ static float *forward_SpatialBatchNormalization(
     char output_path[256];
     sprintf(weight_path, "bin/weight_%i.bin", layer);
     sprintf(bias_path, "bin/bias_%i.bin", layer);
-    sprintf(output_path, "bin/outout_%i_test.bin", layer);
+    sprintf(output_path, "bin/output_%i_test.bin", layer);
 
     // (64, 512, 4, 4)
     // same shape for input and output
@@ -315,7 +318,7 @@ static float *forward_ReLU(
     long inputHeight)
 {
     char output_path[256];
-    sprintf(output_path, "bin/outout_%i_test.bin", layer);
+    sprintf(output_path, "bin/output_%i_test.bin", layer);
 
     long output_size = batchSize * nInputPlane * inputWidth * inputHeight;
     float *output = calloc(output_size, sizeof(float));
@@ -339,7 +342,7 @@ static float *forward_Tanh(
     long inputHeight)
 {
     char output_path[256];
-    sprintf(output_path, "bin/outout_%i_test.bin", layer);
+    sprintf(output_path, "bin/output_%i_test.bin", layer);
 
     long output_size = batchSize * nInputPlane * inputWidth * inputHeight;
     float *output = calloc(output_size, sizeof(float));
