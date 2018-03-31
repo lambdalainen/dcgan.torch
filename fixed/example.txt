@@ -1,0 +1,54 @@
+First, let us make some float matrices LHS and RHS, and compute their product.
+
+Here is the float LHS matrix:
+0.629	0.812	-0.746	0.827
+-0.729	0.67	0.938	-0.558
+
+Here is the float RHS matrix:
+0.265	-0.443	0.915
+-0.384	-0.623	0.993
+-0.805	0.0938	0.93
+0.0944	0.986	0.935
+
+Here is the float product (LHS * RHS) matrix obtained by ordinary float matrix multiplication, i.e. as far as we are concerned, the REFERENCE RESULT:
+0.534	-0.0396	1.46
+-1.26	-0.557	0.348
+
+Now we embark on reproducing this result using quantized arithmetic. The code below splits into two parts: quantization code that only needs to run offline (e.g. to generate a quantized neural network workload), and actual runtime quantized code, which is typically performance-critical and where we typically do not want to use any floating-point arithmetic. We want to clearly distinguish between the two.
+
+The below is OFFLINE QUANTIZATION CODE. We still use some floating-point arithmetic in the process of generating the quantized workload to be run on-device.
+
+Now, let us choose quantization parameters for these matrices. You might ask, what good is quantization if we need to pick quantization parameters for the result before we can run the quantized computation to obtain the result? The idea is that we target applications such as neural networks, where unknown results are only allowed to vary within preexisting bounds. In practice, the bounds for the results are typically learned during the neural network training process. The min and max of the result do not have to be exact. If they are too broad, we just get lower quantization accuracy. If they are too narrow, we just get clamping at the bounds.
+
+For LHS, we have min = -0.746, max = 0.938, scale = 0.0066, zero_point = 113
+For RHS, we have min = -0.805, max = 0.993, scale = 0.00705, zero_point = 114
+For the result, we have min = -1.26, max = 1.46, scale = 0.0107, zero_point = 118
+
+Quantized uint8 LHS matrix:
+208	236	0	238
+3	214	255	29
+
+Quantized uint8 RHS matrix:
+152	51	244
+60	26	255
+0	127	246
+127	254	247
+
+End of OFFLINE QUANTIZATION CODE.
+
+The below is ON-DEVICE RUNTIME QUANTIZED CODE. This is the part that is performance-critical and may only use quantized arithmetic.
+
+Quantized uint8 result matrix obtained by quantized multiplication:
+168	115	255
+0	66	151
+
+End of ON-DEVICE RUNTIME QUANTIZED CODE.
+
+Here is the actual float product (LHS * RHS) matrix obtained by dequantizing the above uint8 result, i.e. as far as we are concerned, the ACTUAL RESULT:
+0.533	-0.032	1.46
+-1.26	-0.554	0.352
+
+Difference between ACTUAL and REFERENCE float results:
+-0.000675	0.00764	-0.000674
+-0.000674	0.0022	0.00369
+
