@@ -2,12 +2,13 @@
 #define __GEMM_H__
 
 struct Q {
-    float *f;   // original data
-    uint8_t *q; // quantized data
+    float *f;     // original data
+    uint8_t *q;   // quantized data
+    int32_t *q32; // quantized data
     float min;
     float max;
     float s;   // scale
-    uint8_t z;  // zero point
+    uint8_t z; // zero point
 };
 
 void gemm(char transa, char transb,
