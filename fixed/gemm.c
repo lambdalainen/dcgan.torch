@@ -272,8 +272,9 @@ void gemm_fixed(char transa, char transb,
               c[j*ldc+i] += term_4;
       }
 
+#if 0 // we choose to scale down after col2im and bias addition
       // scale down to uint8_t
-      double scale = lhs->s * rhs->s / res->s;
+      float scale = lhs->s * rhs->s / res->s;
 
       for (i = 0; i < m; i++)
       {
@@ -287,6 +288,7 @@ void gemm_fixed(char transa, char transb,
               c[idx] = result;
           }
       }
+#endif
 #endif
 
 #if 0

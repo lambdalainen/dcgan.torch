@@ -164,6 +164,22 @@ int main(void)
         a, b, c
     );
 
+    // scale down to uint8_t
+    float scale = a->s * b->s / c->s;
+
+    for (int i = 0; i < m; i++)
+    {
+        for (int j = 0; j < n; j++) {
+            int idx = j*m+i;
+            int32_t result = round(result_fixed[idx] * scale) + c->z;
+            if (result < 0)
+                result = 0;
+            else if (result > 255)
+                result = 255;
+            result_fixed[idx] = result;
+        }
+    }
+
     printf("\nResult by gemm_fixed (2x3 but stored in column-major order):\n");
     for (int i = 0; i < m; i++) {
         for (int j = 0; j < n; j++)
