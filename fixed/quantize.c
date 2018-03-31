@@ -149,8 +149,7 @@ int main(void)
         printf("\n");
     }
 
-    // int32_t to accommodate the accumulating result, but will be
-    // scaled down to 0-255 eventually
+    // int32_t to accommodate the accumulating result
     int32_t result_fixed[6];
 
     gemm_fixed(
