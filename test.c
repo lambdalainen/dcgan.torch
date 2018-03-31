@@ -88,6 +88,17 @@ static void SpatialFullConvolution(
     );
 
     // Do Bias after:
+#if 1
+    long output_plane_size = outputWidth * outputHeight;
+
+    for (long j = 0; j < nOutputPlane; j++) {
+        float b = bias[j];
+        for (long k = 0; k < output_plane_size; k++) {
+            output_n[j*output_plane_size + k] += b;
+        }
+    }
+#endif
+#if 0
     long m_ = outputHeight * outputWidth;
     long n_ = nOutputPlane;
     long k_ = 1;
@@ -102,6 +113,7 @@ static void SpatialFullConvolution(
         1,
         output_n, m_ // beta == 1: c[j*ldc+i] = beta*c[j*ldc+i]+alpha*sum;
     );
+#endif
   }
 
   free(ones);
