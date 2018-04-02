@@ -160,13 +160,17 @@ static void SpatialBatchNormalization(
 
     // compute variance per input
     sum = 0;
+    float l1sum = 0;
     for (int i = 0; i < batchSize; i++) {
         float *plane_ptr = in + i * nInputPlane * input_plane_stride;
-        for (float *p = plane_ptr; p < (plane_ptr + input_plane_stride); p++)
+        for (float *p = plane_ptr; p < (plane_ptr + input_plane_stride); p++) {
             sum += (*p - mean) * (*p - mean);
+            l1sum += fabsf(*p - mean);
+        }
     }
 
     invstd = (float) (1 / sqrt(sum/n + eps));
+    //float inv_l1variance = 1 / (l1sum/n * sqrt(M_PI / 2) + eps);
 
     // compute output
     float w = *(weight + f);
@@ -180,7 +184,14 @@ static void SpatialBatchNormalization(
         for (p = input_plane_ptr, q = output_plane_ptr;
              p < (input_plane_ptr + input_plane_stride) && q < (output_plane_ptr + output_plane_stride);
              p++, q++) {
+#if 1
             *q = (float) (((*p - mean) * invstd) * w + b);
+#else
+            float x = (*p - mean) * inv_l1variance * w + b;
+            *q = x;
+            if (spatial_batch_norm_layer == 1 && f == 0)
+                printf("%f %f\n", ((*p - mean) * invstd) * w + b, x);
+#endif
         }
     }
   }
