@@ -9,6 +9,8 @@ static int dilationW = 1;
 static int dilationH = 1;
 static int spatial_full_conv_layer;
 static int spatial_full_conv_layer_fixed;
+static int spatial_batch_norm_layer;
+static int spatial_batch_norm_layer_fixed;
 
 static void free_q(struct Q *q)
 {
@@ -175,6 +177,73 @@ static void SpatialFullConvolution(
   printf("### finished: spatial_full_conv_layer %i\n", spatial_full_conv_layer);
 }
 
+static void SpatialBatchNormalization(
+  float *input,
+  float *output,
+  float *weight,
+  float *bias,
+  long batchSize,
+  long nInputPlane, // input->size[1]
+  long inputWidth,
+  long inputHeight)
+{
+  spatial_batch_norm_layer++;
+
+  double eps = 0.00001;
+  long nOutputPlane = nInputPlane;
+  long n = batchSize * inputWidth * inputHeight;
+  long input_plane_stride = inputWidth * inputHeight;
+  long output_plane_stride = input_plane_stride;
+
+  // The input dimensions are: (batchSize, nInputPlane, kW, kH), the output has the same dimensions.
+  // Now we are looping through nInputPlane instead of batchSize, therefore we can't simply use
+  // a pointer to point to a continuous memory.
+  for (long f = 0; f < nInputPlane; ++f) {
+    float *in = input + f * input_plane_stride;
+    float *out = output + f * output_plane_stride;
+
+    float mean, invstd;
+
+    // compute mean per input
+    // torch: if real = float, accreal = double
+    double sum = 0;
+    for (int i = 0; i < batchSize; i++) {
+        float *plane_ptr = in + i * nInputPlane * input_plane_stride;
+        for (float *p = plane_ptr; p < (plane_ptr + input_plane_stride); p++)
+            sum += *p;
+    }
+
+    mean = (float) sum / n;
+
+    // compute variance per input
+    sum = 0;
+    for (int i = 0; i < batchSize; i++) {
+        float *plane_ptr = in + i * nInputPlane * input_plane_stride;
+        for (float *p = plane_ptr; p < (plane_ptr + input_plane_stride); p++)
+            sum += (*p - mean) * (*p - mean);
+    }
+
+    invstd = (float) (1 / sqrt(sum/n + eps));
+
+    // compute output
+    float w = *(weight + f);
+    float b = *(bias + f);
+
+    // write output
+    for (int i = 0; i < batchSize; i++) {
+        float *input_plane_ptr = in + i * nInputPlane * input_plane_stride;
+        float *output_plane_ptr = out + i * nOutputPlane * output_plane_stride;
+        float *p, *q;
+        for (p = input_plane_ptr, q = output_plane_ptr;
+             p < (input_plane_ptr + input_plane_stride) && q < (output_plane_ptr + output_plane_stride);
+             p++, q++) {
+            *q = (float) (((*p - mean) * invstd) * w + b);
+        }
+    }
+  }
+  printf("### finished: spatial_batch_norm_layer %i\n", spatial_batch_norm_layer);
+}
+
 static void SpatialFullConvolution_fixed(
     struct Q *input_q,
     struct Q *weight_q,
@@ -267,6 +336,74 @@ static void SpatialFullConvolution_fixed(
 
   printf("### finished: spatial_full_conv_layer_fixed %i\n", spatial_full_conv_layer_fixed);
 }
+
+static void SpatialBatchNormalization_fixed(
+  int32_t *input,
+  int32_t *output,
+  uint8_t *weight,
+  int32_t *bias,
+  long batchSize,
+  long nInputPlane, // input->size[1]
+  long inputWidth,
+  long inputHeight)
+{
+  spatial_batch_norm_layer_fixed++;
+
+  double eps = 0.00001;
+  long nOutputPlane = nInputPlane;
+  long n = batchSize * inputWidth * inputHeight;
+  long input_plane_stride = inputWidth * inputHeight;
+  long output_plane_stride = input_plane_stride;
+
+  // The input dimensions are: (batchSize, nInputPlane, kW, kH), the output has the same dimensions.
+  // Now we are looping through nInputPlane instead of batchSize, therefore we can't simply use
+  // a pointer to point to a continuous memory.
+  for (long f = 0; f < nInputPlane; ++f) {
+    int32_t *in = input + f * input_plane_stride;
+    int32_t *out = output + f * output_plane_stride;
+
+    int32_t mean, invstd;
+
+    // compute mean per input
+    // torch: if real = float, accreal = double
+    int32_t sum = 0;
+    for (int i = 0; i < batchSize; i++) {
+        int32_t *plane_ptr = in + i * nInputPlane * input_plane_stride;
+        for (int32_t *p = plane_ptr; p < (plane_ptr + input_plane_stride); p++)
+            sum += *p;
+    }
+
+    mean = (int32_t) sum / n;
+
+    // compute variance per input
+    sum = 0;
+    for (int i = 0; i < batchSize; i++) {
+        int32_t *plane_ptr = in + i * nInputPlane * input_plane_stride;
+        for (int32_t *p = plane_ptr; p < (plane_ptr + input_plane_stride); p++)
+            sum += (*p - mean) * (*p - mean);
+    }
+
+    invstd = (int32_t) (1 / sqrt(sum/n + eps));
+
+    // compute output
+    int32_t w = *(weight + f);
+    int32_t b = *(bias + f);
+
+    // write output
+    for (int i = 0; i < batchSize; i++) {
+        int32_t *input_plane_ptr = in + i * nInputPlane * input_plane_stride;
+        int32_t *output_plane_ptr = out + i * nOutputPlane * output_plane_stride;
+        int32_t *p, *q;
+        for (p = input_plane_ptr, q = output_plane_ptr;
+             p < (input_plane_ptr + input_plane_stride) && q < (output_plane_ptr + output_plane_stride);
+             p++, q++) {
+            *q = (int32_t) (((*p - mean) * invstd) * w + b);
+        }
+    }
+  }
+  printf("### finished: spatial_batch_norm_layer_fixed %i\n", spatial_batch_norm_layer_fixed);
+}
+
 
 static struct Q *forward_SpatialFullConvolution(
     int layer,
@@ -380,6 +517,70 @@ static struct Q *forward_SpatialFullConvolution(
     return output_q;
 }
 
+static struct Q *forward_SpatialBatchNormalization(
+    int layer,
+    struct Q *input_q,
+    long batchSize,
+    long nInputPlane,
+    long inputWidth,
+    long inputHeight)
+{
+    printf("\n");
+    char weight_path[256];
+    char bias_path[256];
+    char output_path[256];
+    sprintf(weight_path, "../bin/weight_%i.bin", layer);
+    sprintf(bias_path, "../bin/bias_%i.bin", layer);
+    sprintf(output_path, "../bin/output_%i_test.bin", layer);
+
+    // (64, 512, 4, 4)
+    // same shape for input and output
+    long output_size = batchSize * nInputPlane * inputWidth * inputHeight;
+    float *output = calloc(output_size, sizeof(float));
+    // (512)
+    float *weight = calloc(nInputPlane, sizeof(float));
+    // (512)
+    float *bias = calloc(nInputPlane, sizeof(float));
+
+    FILE *fp = fopen(weight_path, "rb");
+    fread(weight, sizeof(float), nInputPlane, fp);
+    fclose(fp);
+    fp = fopen(bias_path, "rb");
+    fread(bias, sizeof(float), nInputPlane, fp);
+    fclose(fp);
+
+    SpatialBatchNormalization(
+        input_q->f, output, weight, bias,
+        batchSize, nInputPlane, inputWidth, inputHeight);
+
+    fp = fopen(output_path, "wb");
+    fwrite(output, sizeof(float), output_size, fp);
+    fclose(fp);
+
+    // ----------
+
+    struct Q *weight_q = quantize(weight, nInputPlane);
+    struct Q *bias_q = quantize_bias(bias, nInputPlane, input_q->s * weight_q->s);
+    struct Q *output_q = quantize(output, output_size);
+
+    printf("weight_q: min %f max %f scale %f zero_point %i\n", weight_q->min, weight_q->max, weight_q->s, weight_q->z);
+    printf("bias_q: scale %f zero_point %i\n", bias_q->s, bias_q->z);
+    printf("output_q: min %f max %f scale %f zero_point %i\n", output_q->min, output_q->max, output_q->s, output_q->z);
+
+    int32_t *output_fixed = calloc(output_size, sizeof(int32_t));
+
+    SpatialBatchNormalization_fixed(
+        input_q->q32, output_fixed, weight_q->q, bias_q->q32,
+        batchSize, nInputPlane, inputWidth, inputHeight);
+
+    free_q(input_q);
+    free_q(weight_q);
+    free_q(bias_q);
+
+    output_q->q32 = output_fixed;
+    return output_q;
+}
+
 int main(void)
 {
     float *input_1f = calloc(64 * 100, sizeof(float));
@@ -397,7 +598,12 @@ int main(void)
 
     // output_1q->q is the quantized values from output_1q->f
     // output_1q->q32 is the actual output of SpatialFullConvolution_fixed
-    free_q(output_1q);
+    //
+    // (64, 512, 4, 4) -> (64, 512, 4, 4)
+    struct Q *output_2q = forward_SpatialBatchNormalization(
+        2, output_1q, 64, 512, 4, 4);
+
+    free_q(output_2q);
 
     return 0;
 }
