@@ -66,6 +66,8 @@ static void SpatialFullConvolution(
     long m = inputHeight * inputWidth;
     long n = nOutputPlane * kW * kH;
     long k = nInputPlane;
+    if (elt == 0)
+        printf("mxk: %lix%li, kxn: %lix%li, mxn: %li\n", m, k, k, n, m*n);
 
     // Do GEMM (note: this is a bit confusing because gemm assumes column-major matrices)
     gemm(
@@ -97,8 +99,7 @@ static void SpatialFullConvolution(
             output_n[j*output_plane_size + k] += b;
         }
     }
-#endif
-#if 0
+#else
     long m_ = outputHeight * outputWidth;
     long n_ = nOutputPlane;
     long k_ = 1;
@@ -260,7 +261,9 @@ static float *forward_SpatialFullConvolution(
     float *weight = calloc(weight_size, sizeof(float));
     float *bias = calloc(nOutputPlane, sizeof(float));
     // columns: (nOutputPlane*kW*kH, inputHeight*inputWidth)
-    float *columns = calloc(nOutputPlane * kW * kH * inputHeight * inputWidth, sizeof(float));
+    long columns_size = nOutputPlane * kW * kH * inputHeight * inputWidth;
+    printf("columns_size: %li\n", columns_size);
+    float *columns = calloc(columns_size, sizeof(float));
 
     FILE *fp = fopen(weight_path, "rb");
     fread(weight, sizeof(float), weight_size, fp);
