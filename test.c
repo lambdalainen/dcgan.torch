@@ -68,7 +68,19 @@ static void SpatialFullConvolution(
     long k = nInputPlane;
     if (elt == 0)
         printf("mxk: %lix%li, kxn: %lix%li, mxn: %li\n", m, k, k, n, m*n);
-
+#if 1
+    // gemm & col2im combined
+    sparse_gemm(
+        m, n, k,
+        input_n, m,
+        weight, n,
+        outputHeight, outputWidth,
+        inputHeight, inputWidth,
+        kH, kW, padH, padW, dH, dW,
+        dilationH, dilationW,
+        output_n
+    );
+#else
     // Do GEMM (note: this is a bit confusing because gemm assumes column-major matrices)
     gemm(
         'n', 't',
@@ -79,7 +91,6 @@ static void SpatialFullConvolution(
         0,
         columns, m
     );
-    //printf("after gemm, output %p, output_n %p\n", output, output_n);
 
     // Unpack columns back into input:
     col2im(
@@ -88,6 +99,7 @@ static void SpatialFullConvolution(
       dilationH, dilationW,
       output_n
     );
+#endif
 
     // Do Bias after:
 #if 1
