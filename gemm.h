@@ -8,6 +8,7 @@ void gemm(char transa, char transb,
 
 void sparse_gemm(long m, long n, long k,
                  float *a, long lda, float *b, long ldb,
+                 long nOutputPlane,
                  long outputHeight, long outputWidth,
                  long inputHeight, long inputWidth,
                  int kH, int kW,

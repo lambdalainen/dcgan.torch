@@ -74,6 +74,7 @@ static void SpatialFullConvolution(
         m, n, k,
         input_n, m,
         weight, n,
+        nOutputPlane,
         outputHeight, outputWidth,
         inputHeight, inputWidth,
         kH, kW, padH, padW, dH, dW,
