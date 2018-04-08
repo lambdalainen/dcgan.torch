@@ -295,6 +295,21 @@ static void SpatialFullConvolution_fixed(
     long n = nOutputPlane * kW * kH;
     long k = nInputPlane;
 
+#if 1
+    // gemm & col2im combined
+    sparse_gemm_fixed(
+        m, n, k,
+        input_n, m,
+        weight_q->q, n,
+        nOutputPlane,
+        outputHeight, outputWidth,
+        inputHeight, inputWidth,
+        kH, kW, padH, padW, dH, dW,
+        dilationH, dilationW,
+        output_n,
+        input_q, weight_q, output_q
+    );
+#else
     // Do GEMM (note: this is a bit confusing because gemm assumes column-major matrices)
     gemm_fixed(
         'n', 't',
@@ -314,6 +329,7 @@ static void SpatialFullConvolution_fixed(
       dilationH, dilationW,
       output_n
     );
+#endif
 
     // Add bias and scale down to uint8_t
     long output_plane_size = outputWidth * outputHeight;
