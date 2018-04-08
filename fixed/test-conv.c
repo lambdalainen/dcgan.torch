@@ -5,6 +5,25 @@
 #include "gemm.h"
 #include "col2im.h"
 
+#define read_bin(type, path, data, count) do { \
+    FILE *fp = fopen(path, "rb"); \
+    fread(data, sizeof(type), count, fp); \
+    fclose(fp); \
+} while (0)
+
+#define save_bin(type, path, data, count) do { \
+    FILE *fp = fopen(path, "wb"); \
+    fwrite(data, sizeof(type), count, fp); \
+    fclose(fp); \
+} while (0)
+
+#define save_txt(path, data, count) do { \
+    FILE *fp = fopen(path, "wb"); \
+    for (long i = 0; i < count; i++) \
+        fprintf(fp, "%x\n", data[i]); \
+    fclose(fp); \
+} while (0)
+
 static int dilationW = 1;
 static int dilationH = 1;
 static int spatial_full_conv_layer;
@@ -436,13 +455,7 @@ static struct Q *forward_SpatialFullConvolution(
     int padW,
     int padH)
 {
-    char weight_path[256];
-    char bias_path[256];
-    char output_path[256];
-    sprintf(weight_path, "../bin/weight_%i.bin", layer);
-    sprintf(bias_path, "../bin/bias_%i.bin", layer);
-    sprintf(output_path, "../bin/output_%i_test.bin", layer);
-
+    char path[256];
     long outputHeight = (inputHeight - 1) * dH - 2*padH + (dilationH * (kH - 1) + 1);
     long outputWidth  = (inputWidth - 1) * dW - 2*padW + (dilationW * (kW - 1) + 1);
     long output_size = batchSize * nOutputPlane * outputWidth * outputHeight;
@@ -453,21 +466,18 @@ static struct Q *forward_SpatialFullConvolution(
     // columns: (nOutputPlane*kW*kH, inputHeight*inputWidth)
     float *columns = calloc(nOutputPlane * kW * kH * inputHeight * inputWidth, sizeof(float));
 
-    FILE *fp = fopen(weight_path, "rb");
-    fread(weight, sizeof(float), weight_size, fp);
-    fclose(fp);
-    fp = fopen(bias_path, "rb");
-    fread(bias, sizeof(float), nOutputPlane, fp);
-    fclose(fp);
+    sprintf(path, "../bin/weight_%i.bin", layer);
+    read_bin(float, path, weight, weight_size);
+    sprintf(path, "../bin/bias_%i.bin", layer);
+    read_bin(float, path, bias, nOutputPlane);
 
     SpatialFullConvolution(
         input_q->f, weight, bias, output, columns,
         batchSize, nInputPlane, inputWidth, inputHeight, nOutputPlane,
         kW, kH, dW, dH, padW, padH);
 
-    fp = fopen(output_path, "wb");
-    fwrite(output, sizeof(float), output_size, fp);
-    fclose(fp);
+    sprintf(path, "../bin/output_%i_test.bin", layer);
+    save_bin(float, path, output, output_size);
 
     // ----------
 
@@ -542,12 +552,7 @@ static struct Q *forward_SpatialBatchNormalization(
     long inputHeight)
 {
     printf("\n");
-    char weight_path[256];
-    char bias_path[256];
-    char output_path[256];
-    sprintf(weight_path, "../bin/weight_%i.bin", layer);
-    sprintf(bias_path, "../bin/bias_%i.bin", layer);
-    sprintf(output_path, "../bin/output_%i_test.bin", layer);
+    char path[256];
 
     // (64, 512, 4, 4)
     // same shape for input and output
@@ -558,20 +563,17 @@ static struct Q *forward_SpatialBatchNormalization(
     // (512)
     float *bias = calloc(nInputPlane, sizeof(float));
 
-    FILE *fp = fopen(weight_path, "rb");
-    fread(weight, sizeof(float), nInputPlane, fp);
-    fclose(fp);
-    fp = fopen(bias_path, "rb");
-    fread(bias, sizeof(float), nInputPlane, fp);
-    fclose(fp);
+    sprintf(path, "../bin/weight_%i.bin", layer);
+    read_bin(float, path, weight, nInputPlane);
+    sprintf(path, "../bin/bias_%i.bin", layer);
+    read_bin(float, path, bias, nInputPlane);
 
     SpatialBatchNormalization(
         input_q->f, output, weight, bias,
         batchSize, nInputPlane, inputWidth, inputHeight);
 
-    fp = fopen(output_path, "wb");
-    fwrite(output, sizeof(float), output_size, fp);
-    fclose(fp);
+    sprintf(path, "../bin/output_%i_test.bin", layer);
+    save_bin(float, path, output, output_size);
 
     // ----------
 
@@ -600,9 +602,7 @@ static struct Q *forward_SpatialBatchNormalization(
 int main(void)
 {
     float *input_1f = calloc(64 * 100, sizeof(float));
-    FILE *fp = fopen("../bin/input_1.bin", "rb");
-    fread(input_1f, sizeof(float), 64 * 100, fp);
-    fclose(fp);
+    read_bin(float, "../bin/input_1.bin", input_1f, 64 * 100);
 
     // quantize input_1f
     struct Q *input_1q = quantize(input_1f, 64 * 100);
