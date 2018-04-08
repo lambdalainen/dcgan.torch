@@ -1,1 +1,3 @@
 gcc -Wall col2im.c gemm.c TransposedConvolution.c
+gcc -Wall sparse-gemm.c TransposedConvolution-fixed.c
+
