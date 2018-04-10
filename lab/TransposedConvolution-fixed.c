@@ -60,6 +60,7 @@ static void SpatialFullConvolution_fixed(
     long m = inputHeight * inputWidth;
     long n = nOutputPlane * kW * kH;
     long k = nInputPlane;
+    printf("m %li, k %li, n %li\n", m, k, n);
 
     // gemm & col2im combined
     sparse_gemm_fixed(
@@ -94,10 +95,11 @@ static int32_t *forward_SpatialFullConvolution(
     long outputWidth  = (inputWidth - 1) * dW - 2*padW + (dilationW * (kW - 1) + 1);
     long output_size = batchSize * nOutputPlane * outputWidth * outputHeight;
     int32_t *output = calloc(output_size, sizeof(int32_t));
+    printf("output_size: %li\n", output_size);
 
     // weight: nInputPlane * nOutputPlane * kW * kH;
-    uint8_t weight[4] = {1, 2, 3, 4};
-    int32_t bias[1] = {0.0f};
+    uint8_t weight[8] = {1, 2, 3, 4, 1, 2, 3, 4};
+    int32_t bias[2] = {0.0f, 0.0f};
 
     SpatialFullConvolution_fixed(
         input, output, weight, bias,
@@ -109,10 +111,17 @@ static int32_t *forward_SpatialFullConvolution(
 
 int main(void)
 {
-    uint8_t input_1[9] = {1, 2, 3, 3, 2, 1, 1, 2, 3};
+    // 2 x 3 x 3
+    uint8_t input_1[18] =
+        { 1, 2, 3,
+          3, 2, 1,
+          1, 2, 3,
+          1, 2, 3,
+          3, 2, 1,
+          1, 2, 3 };
 
     int32_t *output_1 = forward_SpatialFullConvolution(
-        input_1, 1, 1, 3, 3, 1, 2, 2, 2, 2, 1, 1);
+        input_1, 1, 2, 3, 3, 1, 2, 2, 2, 2, 1, 1);
     
     printf("Result: \n");
     for (int i = 0; i < 4; i++) {

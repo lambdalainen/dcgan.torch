@@ -20,6 +20,22 @@ void sparse_gemm_fixed(long m, long n, long k,
                        int dilationH, int dilationW,
                        int32_t* data_im)
 {
+    // print both matrices
+    printf("A:\n");
+    for (long i = 0; i < m; i++)
+    {
+        for (long l = 0; l < k; l++)
+            printf("%i ", a[l*lda+i]); // a is in column major order
+        printf("\n");
+    }
+    printf("B:\n");
+    for (long l = 0; l < k; l++)
+    {
+        for (long j = 0; j < n; j++)
+            printf("%i ", b[l*ldb+j]); // b is in row-major order
+        printf("\n");
+    }
+
     // https://github.com/google/gemmlowp/blob/master/doc/low-precision.md#efficient-handling-of-offsets
     // Term 2: lhs_offset * P * rhs: sum up each column of rhs to make a row vector,
     // scale by lhs zero offset, and add this vector to each row of the result
