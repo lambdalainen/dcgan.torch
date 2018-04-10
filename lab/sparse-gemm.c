@@ -55,6 +55,7 @@ void sparse_gemm_fixed(long m, long n, long k,
     for (int c_im = 0; c_im < nOutputPlane; c_im++) {
         for (int h_offset = 0; h_offset < kH; h_offset++) {
             for (int w_offset = 0; w_offset < kW; w_offset++) {
+                printf("c_im %i, h_offset %i, w_offset %i\n", c_im, h_offset, w_offset);
 
                 // the i-loop splitted into 2 nested loops (i from 0 to m = inputHeight * inputWidth)
                 long i = 0;
@@ -62,13 +63,18 @@ void sparse_gemm_fixed(long m, long n, long k,
                     for (long w_col = 0; w_col < inputWidth; ++w_col) {
                         int h_im = h_col * strideH - padH + h_offset * dilationH;
                         int w_im = w_col * strideW - padW + w_offset * dilationW;
+                        printf("j %li, i %li, h_col %li, w_col %li, h_im %i, w_im %i\n", j, i, h_col, w_col, h_im, w_im);
                         if (h_im >= 0 && h_im < outputHeight && w_im >= 0 && w_im < outputWidth) {
                             int32_t sum = 0;
-                            for (long l = 0; l < k; l++)
-                                sum += a[l*lda + i] * b[l*ldb+j];
+                            printf("j %li, i %li: inside im\n", j, i);
+                            for (long l = 0; l < k; l++) {
+                                sum += a[l*lda + i] * b[l*ldb + j];
+                                printf("sum += a[%li] * b[%li]\n", l*lda + i, l*ldb + j);
+                            }
                             sum += row_vector[j]; // Term 2
                             sum += column_vector[i]; // Term 3
                             sum += term_4; // Term 4
+                            printf("data_im[%li] += %i\n", (c_im * outputHeight + h_im) * outputWidth + w_im, sum);
                             data_im[(c_im * outputHeight + h_im) * outputWidth + w_im] += sum;
                         }
                         i++;
