@@ -85,7 +85,8 @@ void sparse_gemm_fixed(long m, long n, long k,
                             printf("j %li, i %li: inside im\n", j, i);
                             for (long l = 0; l < k; l++) {
                                 sum += a[l*lda + i] * b[l*ldb + j];
-                                printf("sum += a[%li] * b[%li], sum %i\n", l*lda + i, l*ldb + j, sum);
+                                printf("sum += a[%li] * b[%li] (%i * %i), sum %i\n",
+                                        l*lda + i, l*ldb + j, a[l*lda + i], b[l*ldb + j], sum);
                             }
                             sum += row_vector[j]; // Term 2
                             sum += column_vector[i]; // Term 3
