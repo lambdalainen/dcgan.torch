@@ -97,8 +97,10 @@ static int32_t *forward_SpatialFullConvolution(
     int32_t *output = calloc(output_size, sizeof(int32_t));
     printf("output_size: %li\n", output_size);
 
-    // weight: nInputPlane * nOutputPlane * kW * kH;
-    uint8_t weight[8] = {1, 2, 3, 4, 1, 2, 3, 4};
+    // weight: (nInputPlane) * (nOutputPlane * kW * kH);
+    //                k                    n
+    uint8_t weight[16] = {1, 2, 3, 4, 1, 2, 3, 4,
+                          1, 2, 3, 4, 1, 2, 3, 4};
     int32_t bias[2] = {0.0f, 0.0f};
 
     SpatialFullConvolution_fixed(
@@ -121,14 +123,16 @@ int main(void)
           1, 2, 3 };
 
     int32_t *output_1 = forward_SpatialFullConvolution(
-        input_1, 1, 2, 3, 3, 1, 2, 2, 2, 2, 1, 1);
+        input_1, 1, 2, 3, 3, 2, 2, 2, 2, 2, 1, 1);
     
     printf("Result: \n");
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 4; j++) {
-            printf("%i ", output_1[i * 4 + j]);
+    for (int n = 0; n < 2; n++) {
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                printf("%i ", output_1[n * 16 + i * 4 + j]);
+            }
+            printf("\n");
         }
-        printf("\n");
     }
 
     free(output_1);
