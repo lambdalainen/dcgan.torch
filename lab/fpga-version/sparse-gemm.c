@@ -25,14 +25,14 @@ void sparse_gemm_fixed(long m, long n, long k,
     for (long i = 0; i < m; i++)
     {
         for (long l = 0; l < k; l++)
-            printf("%i ", a[l*lda+i]); // a is in column major order
+            printf("%i ", a[l*lda+i]);
         printf("\n");
     }
     printf("B:\n");
     for (long l = 0; l < k; l++)
     {
         for (long j = 0; j < n; j++)
-            printf("%i ", b[l*ldb+j]); // b is in row-major order
+            printf("%i ", b[j*ldb+l]);
         printf("\n");
     }
 
@@ -84,9 +84,9 @@ void sparse_gemm_fixed(long m, long n, long k,
                             int32_t sum = 0;
                             printf("j %li, i %li: inside im\n", j, i);
                             for (long l = 0; l < k; l++) {
-                                sum += a[l*lda + i] * b[l*ldb + j];
+                                sum += a[l*lda + i] * b[j*ldb + l];
                                 printf("sum += a[%li] * b[%li] (%i * %i), sum %i\n",
-                                        l*lda + i, l*ldb + j, a[l*lda + i], b[l*ldb + j], sum);
+                                        l*lda + i, j*ldb + l, a[l*lda + i], b[j*ldb + l], sum);
                             }
                             sum += row_vector[j]; // Term 2
                             sum += column_vector[i]; // Term 3

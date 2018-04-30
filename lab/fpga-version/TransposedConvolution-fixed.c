@@ -66,7 +66,7 @@ static void SpatialFullConvolution_fixed(
     sparse_gemm_fixed(
         m, n, k,
         input_n, m,
-        weight, n,
+        weight, k,
         nOutputPlane,
         outputHeight, outputWidth,
         inputHeight, inputWidth,
