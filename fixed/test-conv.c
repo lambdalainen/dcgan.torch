@@ -355,11 +355,19 @@ static void SpatialFullConvolution_fixed(
     long output_plane_size = outputWidth * outputHeight;
     float scale = input_q->s * weight_q->s / output_q->s;
 
+    int ii = 0;
     for (long j = 0; j < nOutputPlane; j++) {
         int32_t b = bias_q->q32[j];
         for (long k = 0; k < output_plane_size; k++) {
             long idx = j*output_plane_size + k;
             int32_t output = output_n[idx] + b;
+#if 1
+            if (elt == 0) {
+                printf("%04i: %08x \t + %i -> %08x\n", ii, output_n[idx], b, output);
+                ii++;
+            }
+#endif
+
             int32_t result = round(output * scale) + output_q->z;
             if (result < 0)
                 result = 0;
@@ -507,6 +515,7 @@ static struct Q *forward_SpatialFullConvolution(
     printf("weight_q: min %f max %f scale %f zero_point %i\n", weight_q->min, weight_q->max, weight_q->s, weight_q->z);
     printf("bias_q: scale %f zero_point %i\n", bias_q->s, bias_q->z);
     printf("output_q: min %f max %f scale %f zero_point %i\n", output_q->min, output_q->max, output_q->s, output_q->z);
+    printf("term_4: %i\n", input_q->z * weight_q->z * k);
 
     int32_t *output_fixed = calloc(output_size, sizeof(int32_t));
     int32_t *columns_fixed = calloc(nOutputPlane * kW * kH * inputHeight * inputWidth, sizeof(int32_t));
@@ -523,7 +532,8 @@ static struct Q *forward_SpatialFullConvolution(
     }
 
     // At this point we have 2 groups of data we can compare:
-    // output vs output_deq, output_fixed vs output_q->q
+    // output vs output_deq: original float output vs dequantized float from uint8_t
+    // output_fixed vs output_q->q: fixed uint8_t output vs quantized uint8_t from original float output
     int diff_sum_fixed = 0;
     int diff_abs_sum_fixed = 0;
     int diff_squared_sum_fixed = 0;
