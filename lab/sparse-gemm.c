@@ -41,30 +41,37 @@ void sparse_gemm_fixed(long m, long n, long k,
     // scale by lhs zero offset, and add this vector to each row of the result
     int32_t row_vector[n];
 
+    printf("term_2: row_vector:\n");
     for (long j = 0; j < n; j++)
     {
         int32_t sum = 0;
         for (long l = 0; l < k; l++)
             sum += b[l*ldb+j]; // b is in row-major order
-        row_vector[j] = - 0 * sum;
+        row_vector[j] = - 1 * sum;
+        printf("%i ", row_vector[j]);
     }
+    printf("\n");
 
     // Term 3: lhs * rhs_offset * Q: sum each row of lhs to make a column-vector,
     // scale by rhs zero offset, and add this vector to each column of the result
     int32_t column_vector[m];
 
+    printf("term_3: column_vector:\n");
     for (long i = 0; i < m; i++)
     {
         int32_t sum = 0;
         for (long l = 0; l < k; l++)
             sum += a[l*lda+i]; // a is in column major order
-        column_vector[i] = - 0 * sum;
+        column_vector[i] = - 2 * sum;
+        printf("%i ", column_vector[i]);
     }
+    printf("\n");
 
     // Term 4: lhs_offset * rhs_offset * P * Q (constant): same as lhs_offset * rhs_offset * depth,
     // where depth is the number of columns of the lhs, this constant is added to
     // each element of the result
-    int32_t term_4 = 0 * 0 * k;
+    int32_t term_4 = 1 * 2 * k;
+    printf("term_4: %i\n", term_4);
 
     // the j-loop splitted into 3 nested loops (j from 0 to n = nOutputPlane * kH * kW)
     long j = 0;
@@ -88,6 +95,8 @@ void sparse_gemm_fixed(long m, long n, long k,
                                 printf("sum += a[%li] * b[%li] (%i * %i), sum %i\n",
                                         l*lda + i, l*ldb + j, a[l*lda + i], b[l*ldb + j], sum);
                             }
+                            printf("row_vector[%li] %i, column_vector[%li] %i\n",
+                                    j, row_vector[j], i, column_vector[i]);
                             sum += row_vector[j]; // Term 2
                             sum += column_vector[i]; // Term 3
                             sum += term_4; // Term 4
