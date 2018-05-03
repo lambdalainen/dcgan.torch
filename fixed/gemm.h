@@ -33,6 +33,6 @@ void sparse_gemm_fixed(long m, long n, long k,
                        int strideH, int strideW,
                        int dilationH, int dilationW,
                        int32_t* data_im,
-                       struct Q *lhs, struct Q *rhs, struct Q *res);
+                       struct Q *lhs, struct Q *rhs, struct Q *res, int layer);
 
 #endif

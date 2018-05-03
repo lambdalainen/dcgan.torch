@@ -326,7 +326,8 @@ static void SpatialFullConvolution_fixed(
         kH, kW, padH, padW, dH, dW,
         dilationH, dilationW,
         output_n,
-        input_q, weight_q, output_q
+        input_q, weight_q, output_q,
+        elt == 0 ? spatial_full_conv_layer_fixed : 0
     );
 #else
     // Do GEMM (note: this is a bit confusing because gemm assumes column-major matrices)
@@ -484,6 +485,24 @@ static struct Q *forward_SpatialFullConvolution(
     struct Q *weight_q = quantize(weight, weight_size);
     struct Q *bias_q = quantize_bias(bias, nOutputPlane, input_q->s * weight_q->s);
     struct Q *output_q = quantize(output, output_size);
+
+    // save to .mem file, used to initialize BRAM
+    sprintf(path, "../bin/input_%i_uint8.mem", layer);
+    save_txt(path, input_q->q, nInputPlane); // only save 1 batch
+
+    // transpose weight_q and save to .bin file, used to generate .mcs file to program SPI Flash
+    uint8_t *weight_fpga = calloc(weight_size, sizeof(uint8_t));
+    int n = nOutputPlane * kW * kH;
+    int k = nInputPlane;
+    for (int i = 0; i < k; i++)
+        for (int j = 0; j < n; j++)
+            weight_fpga[j * k + i] = weight_q->q[i * n + j];
+    sprintf(path, "../bin/weight_%i_uint8.bin", layer);
+    save_bin(uint8_t, path, weight_fpga, weight_size);
+    sprintf(path, "../bin/weight_%i_uint8.mem", layer);
+    save_txt(path, weight_fpga, weight_size);
+    sprintf(path, "../bin/bias_%i_int32.mem", layer);
+    save_txt(path, bias_q->q32, nOutputPlane);
 
     printf("weight_q: min %f max %f scale %f zero_point %i\n", weight_q->min, weight_q->max, weight_q->s, weight_q->z);
     printf("bias_q: scale %f zero_point %i\n", bias_q->s, bias_q->z);

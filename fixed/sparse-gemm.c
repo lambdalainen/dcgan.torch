@@ -2,6 +2,13 @@
 #include <stdint.h>
 #include "gemm.h"
 
+#define save_txt(path, data, count) do { \
+    FILE *fp = fopen(path, "wb"); \
+    for (long i = 0; i < count; i++) \
+        fprintf(fp, "%x\n", data[i]); \
+    fclose(fp); \
+} while (0)
+
 // Why this works:
 // 0. recognize that the i & j for-loops in gemm can be swapped
 // 1. recognize that the j for-loop in gemm can be splitted into 3 nested for-loops
@@ -20,7 +27,7 @@ void sparse_gemm_fixed(long m, long n, long k,
                        int strideH, int strideW,
                        int dilationH, int dilationW,
                        int32_t* data_im,
-                       struct Q *lhs, struct Q *rhs, struct Q *res)
+                       struct Q *lhs, struct Q *rhs, struct Q *res, int layer)
 {
     // https://github.com/google/gemmlowp/blob/master/doc/low-precision.md#efficient-handling-of-offsets
     // Term 2: lhs_offset * P * rhs: sum up each column of rhs to make a row vector,
@@ -33,6 +40,12 @@ void sparse_gemm_fixed(long m, long n, long k,
         for (long l = 0; l < k; l++)
             sum += b[l*ldb+j]; // b is in row-major order
         row_vector[j] = - lhs->z * sum;
+    }
+
+    if (layer) {
+        char path[256];
+        sprintf(path, "../bin/row_vec_%i_int32.mem", layer);
+        save_txt(path, row_vector, n);
     }
 
     // Term 3: lhs * rhs_offset * Q: sum each row of lhs to make a column-vector,
