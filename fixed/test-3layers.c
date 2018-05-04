@@ -30,6 +30,8 @@ static int spatial_full_conv_layer;
 static int spatial_full_conv_layer_fixed;
 static int spatial_batch_norm_layer;
 static int spatial_batch_norm_layer_fixed;
+static int relu_layer;
+static int relu_layer_fixed;
 
 static void free_q(struct Q *q)
 {
@@ -523,6 +525,48 @@ static void SpatialBatchNormalization_fixed(
   printf("### finished: spatial_batch_norm_layer_fixed %i\n", spatial_batch_norm_layer_fixed);
 }
 
+static void ReLU(
+    float *input,
+    float *output,
+    long count)
+{
+    relu_layer++;
+
+    float *p, *q;
+    for (p = input, q = output;
+         p < (input + count) && q < (output + count);
+         p++, q++) {
+        *q = *p > 0 ? *p : 0;
+    }
+    printf("### finished: relu_layer %i\n", relu_layer);
+}
+
+static void ReLU_fixed(
+    struct Q *input_q,
+    uint8_t *output,
+    long count,
+    float scale_axb,
+    float scale_res,
+    uint8_t zero_offset_res)
+{
+    relu_layer_fixed++;
+
+    float scale = scale_axb / scale_res;
+    int32_t *p;
+    uint8_t *q;
+    for (p = input_q->q32, q = output;
+         p < (input_q->q32 + count) && q < (output + count);
+         p++, q++) {
+        int32_t x = *p > 0 ? *p : 0;
+        uint8_t result = round(x * scale) + zero_offset_res;
+        if (result < 0)
+            result = 0;
+        else if (result > 255)
+            result = 255;
+        *q = result;
+    }
+    printf("### finished: relu_layer_fixed %i\n", relu_layer_fixed);
+}
 
 static struct Q *forward_SpatialFullConvolution(
     int layer,
@@ -699,6 +743,14 @@ static struct Q *forward_SpatialBatchNormalization(
         output_deq[i] = scale_axb * output_fixed[i];
     }
 
+    printf("First 10 output values (float vs dequantized):\n");
+    for (int i = 0; i < 10; i++)
+        printf("%f ", output[i]);
+    printf("\n");
+    for (int i = 0; i < 10; i++)
+        printf("%f ", output_deq[i]);
+    printf("\n");
+
     // At this point we have 2 groups of data we can compare:
     // - output_fixed (scaled down from int32_t to uint8_t) vs output_q->q (quantized uint8_t from
     //   original float output)
@@ -716,6 +768,61 @@ static struct Q *forward_SpatialBatchNormalization(
     return output_q;
 }
 
+static struct Q *forward_ReLU(
+    int layer,
+    struct Q *input_q,
+    long batchSize,
+    long nInputPlane,
+    long inputWidth,
+    long inputHeight,
+    float scale_axb,
+    float scale_res,
+    uint8_t zero_offset_res)
+{
+    printf("\n");
+    char path[256];
+
+    long output_count = batchSize * nInputPlane * inputWidth * inputHeight;
+    float *output = calloc(output_count, sizeof(float));
+
+    ReLU(input_q->f, output, output_count);
+
+    sprintf(path, "../bin/output_%i_test.bin", layer);
+    save_bin(float, path, output, output_count);
+
+    // ----------
+    //
+    struct Q *output_q = quantize(output, output_count);
+    printf("output_q: min %f max %f scale %f zero_point %i\n", output_q->min, output_q->max, output_q->s, output_q->z);
+
+    uint8_t *output_fixed = calloc(output_count, sizeof(uint8_t));
+
+    ReLU_fixed(input_q, output_fixed, output_count, scale_axb, scale_res, zero_offset_res);
+
+    // output dequantized
+    float *output_deq = calloc(output_count, sizeof(float));
+    for (int i = 0; i < output_count; i++) {
+        output_deq[i] = scale_res * (output_fixed[i] - zero_offset_res);
+    }
+
+    printf("Non-zero values from the first 100 outputs (float vs dequantized):\n");
+    for (int i = 0; i < 100; i++)
+        if (output[i] != 0.0f)
+            printf("%f ", output[i]);
+    printf("\n");
+    for (int i = 0; i < 100; i++)
+        if (output[i] != 0.0f)
+            printf("%f ", output_deq[i]);
+    printf("\n");
+
+    compare_output_float(output, output_deq, output_count);
+
+    free(output_deq);
+    free_q(input_q);
+
+    return output_q;
+}
+
 int main(void)
 {
     float *input_1f = calloc(64 * 100, sizeof(float));
@@ -727,7 +834,7 @@ int main(void)
 
     // (64, 100, 1, 1) -> (64, 512, 4, 4)
     float scale_axb = 0.0f; // S_A * S_B
-    float scale_res; // S_A * S_B / S_R
+    float scale_res; // S_R
     uint8_t zero_offset_res;
     struct Q *output_1q = forward_SpatialFullConvolution(
         1, input_1q, 64, 100, 1, 1, 512, 4, 4, 1, 1, 0, 0, &scale_axb);
@@ -741,7 +848,11 @@ int main(void)
     struct Q *output_2q = forward_SpatialBatchNormalization(
         2, output_1q, 64, 512, 4, 4, scale_axb);
 
-    free_q(output_2q);
+    // (64, 512, 4, 4) -> (64, 512, 4, 4)
+    //scale_res = scale_axb / output_2q->s;
+    struct Q *output_3q = forward_ReLU(3, output_2q, 64, 512, 4, 4, scale_axb, scale_res, zero_offset_res);
+
+    free_q(output_3q);
 
     return 0;
 }
