@@ -99,6 +99,23 @@ static struct Q *quantize_int32(float *data, long count, float scale)
     return q;
 }
 
+static void compare_output_float(float *output_float, float *output_deq, int output_count)
+{
+    float diff_sum = 0.0f;
+    float diff_abs_sum = 0.0f;
+    float diff_squared_sum = 0.0f;
+    for (int i = 0; i < output_count; i++) {
+        float diff = output_deq[i] - output_float[i];
+        diff_sum += diff;
+        diff_abs_sum += fabsf(diff);
+        diff_squared_sum += diff * diff;
+    }
+    printf("--- float diffs:\n");
+    printf("sum diff: %f average diff: %f\n", diff_sum, diff_sum / output_count);
+    printf("average absolute diff: %f, RMS diff: %f\n", diff_abs_sum / output_count,
+            sqrtf(diff_squared_sum / output_count));
+}
+
 static void SpatialFullConvolution(
     float *input,
     float *weight,
@@ -438,7 +455,7 @@ static void SpatialBatchNormalization_fixed(
     int32_t *in = input_q->q32 + f * input_plane_stride;
     int32_t *out = output + f * output_plane_stride;
 
-    int32_t mean, invstd;
+    int32_t mean;
 
     // compute mean per input
     // torch: if real = float, accreal = double
@@ -585,6 +602,7 @@ static struct Q *forward_SpatialFullConvolution(
         batchSize, nInputPlane, inputWidth, inputHeight, nOutputPlane,
         kW, kH, dW, dH, padW, padH);
 
+#if 0 // only for when output of transconv is scaled down to uint8_t
     // output dequantized
     float *output_deq = calloc(output_count, sizeof(float));
     for (int i = 0; i < output_count; i++) {
@@ -608,19 +626,9 @@ static struct Q *forward_SpatialFullConvolution(
     printf("average absolute diff: %f, RMS diff: %f\n", (float)diff_abs_sum_fixed / output_count,
             sqrtf((float)diff_squared_sum_fixed / output_count));
 
-    float diff_sum = 0.0f;
-    float diff_abs_sum = 0.0f;
-    float diff_squared_sum = 0.0f;
-    for (int i = 0; i < output_count; i++) {
-        float diff = output_deq[i] - output[i];
-        diff_sum += diff;
-        diff_abs_sum += fabsf(diff);
-        diff_squared_sum += diff * diff;
-    }
-    printf("--- float diffs:\n");
-    printf("sum diff: %f average diff: %f\n", diff_sum, diff_sum / output_count);
-    printf("average absolute diff: %f, RMS diff: %f\n", diff_abs_sum / output_count,
-            sqrtf(diff_squared_sum / output_count));
+    compare_output_float(output, output_deq, output_count);
+    free(output_deq);
+#endif
 
     free_q(input_q);
     free_q(weight_q);
@@ -685,13 +693,20 @@ static struct Q *forward_SpatialBatchNormalization(
         input_q, output_fixed, weight_q->q32, bias_q->q32,
         batchSize, nInputPlane, inputWidth, inputHeight, qscale);
 
-    for (int i = 0; i < 10; i++)
-        printf("%f ", output[i]);
-    printf("\n");
+    // output dequantized
+    float *output_deq = calloc(output_count, sizeof(float));
+    for (int i = 0; i < output_count; i++) {
+        output_deq[i] = qscale * output_fixed[i];
+    }
 
-    for (int i = 0; i < 10; i++)
-        printf("%f ", output_fixed[i] * qscale);
-    printf("\n");
+    // At this point we have 2 groups of data we can compare:
+    // - output_fixed (scaled down from int32_t to uint8_t) vs output_q->q (quantized uint8_t from
+    //   original float output)
+    // - output vs output_deq: original float output vs dequantized float from uint8_t
+    //
+    // Here we only compare the floating data
+    compare_output_float(output, output_deq, output_count);
+    free(output_deq);
 
     free_q(input_q);
     free_q(weight_q);
