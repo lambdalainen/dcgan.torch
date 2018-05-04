@@ -360,13 +360,13 @@ static void SpatialFullConvolution_fixed(
 #endif
 
     // Add bias and scale down to uint8_t
-    long output_plane_size = outputWidth * outputHeight;
+    long output_plane_area = outputWidth * outputHeight;
 
     int ii = 0;
     for (long j = 0; j < nOutputPlane; j++) {
         int32_t b = bias_q->q32[j];
-        for (long k = 0; k < output_plane_size; k++) {
-            long idx = j*output_plane_size + k;
+        for (long k = 0; k < output_plane_area; k++) {
+            long idx = j*output_plane_area + k;
             int32_t output = output_n[idx] + b;
 #if 1
             if (elt == 0) {
@@ -497,6 +497,8 @@ static void SpatialBatchNormalization_fixed(
             if (f == 0 && i == 0)
                 printf("%f\n", (*p - mean) * invstd_f);
 #endif
+            // So on FPGA, (*p - mean) and w are converted to float and then multiplied with invstd_f,
+            // converted back to int32 and then added with b to produce the result
             *q = (int32_t)((*p - mean) * invstd_f * w) + b;
         }
     }
@@ -524,16 +526,16 @@ static struct Q *forward_SpatialFullConvolution(
     char path[256];
     long outputHeight = (inputHeight - 1) * dH - 2*padH + (dilationH * (kH - 1) + 1);
     long outputWidth  = (inputWidth - 1) * dW - 2*padW + (dilationW * (kW - 1) + 1);
-    long output_size = batchSize * nOutputPlane * outputWidth * outputHeight;
-    float *output = calloc(output_size, sizeof(float));
-    long weight_size = nInputPlane * nOutputPlane * kW * kH;
-    float *weight = calloc(weight_size, sizeof(float));
+    long output_count = batchSize * nOutputPlane * outputWidth * outputHeight;
+    float *output = calloc(output_count, sizeof(float));
+    long weight_count = nInputPlane * nOutputPlane * kW * kH;
+    float *weight = calloc(weight_count, sizeof(float));
     float *bias = calloc(nOutputPlane, sizeof(float));
     // columns: (nOutputPlane*kW*kH, inputHeight*inputWidth)
     float *columns = calloc(nOutputPlane * kW * kH * inputHeight * inputWidth, sizeof(float));
 
     sprintf(path, "../bin/weight_%i.bin", layer);
-    read_bin(float, path, weight, weight_size);
+    read_bin(float, path, weight, weight_count);
     sprintf(path, "../bin/bias_%i.bin", layer);
     read_bin(float, path, bias, nOutputPlane);
 
@@ -543,30 +545,30 @@ static struct Q *forward_SpatialFullConvolution(
         kW, kH, dW, dH, padW, padH);
 
     sprintf(path, "../bin/output_%i_test.bin", layer);
-    save_bin(float, path, output, output_size);
+    save_bin(float, path, output, output_count);
 
     // ----------
 
-    struct Q *weight_q = quantize(weight, weight_size);
+    struct Q *weight_q = quantize(weight, weight_count);
     *qscale = input_q->s * weight_q->s;
     struct Q *bias_q = quantize_int32(bias, nOutputPlane, *qscale);
-    struct Q *output_q = quantize(output, output_size);
+    struct Q *output_q = quantize(output, output_count);
 
     // save to .mem file, used to initialize BRAM
     sprintf(path, "../bin/input_%i_uint8.mem", layer);
     save_txt(path, input_q->q, nInputPlane); // only save 1 batch
 
     // transpose weight_q and save to .bin file, used to generate .mcs file to program SPI Flash
-    uint8_t *weight_fpga = calloc(weight_size, sizeof(uint8_t));
+    uint8_t *weight_fpga = calloc(weight_count, sizeof(uint8_t));
     int n = nOutputPlane * kW * kH;
     int k = nInputPlane;
     for (int i = 0; i < k; i++)
         for (int j = 0; j < n; j++)
             weight_fpga[j * k + i] = weight_q->q[i * n + j];
     sprintf(path, "../bin/weight_%i_uint8.bin", layer);
-    save_bin(uint8_t, path, weight_fpga, weight_size);
+    save_bin(uint8_t, path, weight_fpga, weight_count);
     sprintf(path, "../bin/weight_%i_uint8.mem", layer);
-    save_txt(path, weight_fpga, weight_size);
+    save_txt(path, weight_fpga, weight_count);
     sprintf(path, "../bin/bias_%i_int32.mem", layer);
     save_txt(path, bias_q->q32, nOutputPlane);
 
@@ -575,7 +577,7 @@ static struct Q *forward_SpatialFullConvolution(
     printf("output_q: min %f max %f scale %f zero_point %i\n", output_q->min, output_q->max, output_q->s, output_q->z);
     printf("term_4: %i\n", input_q->z * weight_q->z * k);
 
-    int32_t *output_fixed = calloc(output_size, sizeof(int32_t));
+    int32_t *output_fixed = calloc(output_count, sizeof(int32_t));
     int32_t *columns_fixed = calloc(nOutputPlane * kW * kH * inputHeight * inputWidth, sizeof(int32_t));
 
     SpatialFullConvolution_fixed(
@@ -584,8 +586,8 @@ static struct Q *forward_SpatialFullConvolution(
         kW, kH, dW, dH, padW, padH);
 
     // output dequantized
-    float *output_deq = calloc(output_size, sizeof(float));
-    for (int i = 0; i < output_size; i++) {
+    float *output_deq = calloc(output_count, sizeof(float));
+    for (int i = 0; i < output_count; i++) {
         output_deq[i] = output_q->s * (output_fixed[i] - output_q->z);
     }
 
@@ -595,30 +597,30 @@ static struct Q *forward_SpatialFullConvolution(
     int diff_sum_fixed = 0;
     int diff_abs_sum_fixed = 0;
     int diff_squared_sum_fixed = 0;
-    for (int i = 0; i < output_size; i++) {
+    for (int i = 0; i < output_count; i++) {
         int diff = output_fixed[i] - output_q->q[i];
         diff_sum_fixed += diff;
         diff_abs_sum_fixed += abs(diff);
         diff_squared_sum_fixed += diff * diff;
     }
     printf("--- fixed diffs:\n");
-    printf("sum diff: %i average diff: %f\n", diff_sum_fixed, (float)diff_sum_fixed / output_size);
-    printf("average absolute diff: %f, RMS diff: %f\n", (float)diff_abs_sum_fixed / output_size,
-            sqrtf((float)diff_squared_sum_fixed / output_size));
+    printf("sum diff: %i average diff: %f\n", diff_sum_fixed, (float)diff_sum_fixed / output_count);
+    printf("average absolute diff: %f, RMS diff: %f\n", (float)diff_abs_sum_fixed / output_count,
+            sqrtf((float)diff_squared_sum_fixed / output_count));
 
     float diff_sum = 0.0f;
     float diff_abs_sum = 0.0f;
     float diff_squared_sum = 0.0f;
-    for (int i = 0; i < output_size; i++) {
+    for (int i = 0; i < output_count; i++) {
         float diff = output_deq[i] - output[i];
         diff_sum += diff;
         diff_abs_sum += fabsf(diff);
         diff_squared_sum += diff * diff;
     }
     printf("--- float diffs:\n");
-    printf("sum diff: %f average diff: %f\n", diff_sum, diff_sum / output_size);
-    printf("average absolute diff: %f, RMS diff: %f\n", diff_abs_sum / output_size,
-            sqrtf(diff_squared_sum / output_size));
+    printf("sum diff: %f average diff: %f\n", diff_sum, diff_sum / output_count);
+    printf("average absolute diff: %f, RMS diff: %f\n", diff_abs_sum / output_count,
+            sqrtf(diff_squared_sum / output_count));
 
     free_q(input_q);
     free_q(weight_q);
@@ -644,8 +646,8 @@ static struct Q *forward_SpatialBatchNormalization(
 
     // (64, 512, 4, 4)
     // same shape for input and output
-    long output_size = batchSize * nInputPlane * inputWidth * inputHeight;
-    float *output = calloc(output_size, sizeof(float));
+    long output_count = batchSize * nInputPlane * inputWidth * inputHeight;
+    float *output = calloc(output_count, sizeof(float));
     // (512)
     float *weight = calloc(nInputPlane, sizeof(float));
     // (512)
@@ -661,13 +663,13 @@ static struct Q *forward_SpatialBatchNormalization(
         batchSize, nInputPlane, inputWidth, inputHeight);
 
     sprintf(path, "../bin/output_%i_test.bin", layer);
-    save_bin(float, path, output, output_size);
+    save_bin(float, path, output, output_count);
 
     // ----------
 
     struct Q *weight_q = quantize_int32(weight, nInputPlane, qscale);
     struct Q *bias_q = quantize_int32(bias, nInputPlane, qscale);
-    struct Q *output_q = quantize(output, output_size);
+    struct Q *output_q = quantize(output, output_count);
 
     sprintf(path, "../bin/weight_%i_int32.mem", layer);
     save_txt(path, weight_q->q32, nInputPlane);
@@ -677,7 +679,7 @@ static struct Q *forward_SpatialBatchNormalization(
     printf("quantization scale for BN weight and bias: %f\n", qscale);
     printf("output_q: min %f max %f scale %f zero_point %i\n", output_q->min, output_q->max, output_q->s, output_q->z);
 
-    int32_t *output_fixed = calloc(output_size, sizeof(int32_t));
+    int32_t *output_fixed = calloc(output_count, sizeof(int32_t));
 
     SpatialBatchNormalization_fixed(
         input_q, output_fixed, weight_q->q32, bias_q->q32,
