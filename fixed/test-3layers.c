@@ -795,6 +795,9 @@ static struct Q *forward_ReLU(
     struct Q *output_q = quantize(output, output_count);
     printf("output_q: min %f max %f scale %f zero_point %i\n", output_q->min, output_q->max, output_q->s, output_q->z);
 
+    // TODO: also try output from BN
+    //scale_res = output_q->s;
+    //zero_offset_res = output_q->z;
     uint8_t *output_fixed = calloc(output_count, sizeof(uint8_t));
 
     ReLU_fixed(input_q, output_fixed, output_count, scale_axb, scale_res, zero_offset_res);
