@@ -823,6 +823,8 @@ static struct Q *forward_ReLU(
     free(output_deq);
     free_q(input_q);
 
+    free(output_q->q);
+    output_q->q = output_fixed;
     return output_q;
 }
 
@@ -852,7 +854,6 @@ int main(void)
         2, output_1q, 64, 512, 4, 4, scale_axb);
 
     // (64, 512, 4, 4) -> (64, 512, 4, 4)
-    //scale_res = scale_axb / output_2q->s;
     struct Q *output_3q = forward_ReLU(3, output_2q, 64, 512, 4, 4, scale_axb, scale_res, zero_offset_res);
 
     free_q(output_3q);
