@@ -84,7 +84,7 @@ static struct Q *quantize(float *data, long count)
 
 // Quantization and Training of Neural Networks for Efficient Integer-Arithmetic-Only Inference
 // Section 2.4, on bias handling
-static struct Q *quantize_bias(float *data, long count, float scale)
+static struct Q *quantize_int32(float *data, long count, float scale)
 {
     struct Q *q = calloc(1, sizeof(struct Q));
     q->f = data;
@@ -233,6 +233,8 @@ static void SpatialBatchNormalization(
     }
 
     mean = (float) sum / n;
+    if (f == 0)
+        printf("%s: <sum %f mean %f>\n", __func__, sum, mean);
 
     // compute variance per input
     sum = 0;
@@ -243,6 +245,8 @@ static void SpatialBatchNormalization(
     }
 
     invstd = (float) (1 / sqrt(sum/n + eps));
+    if (f == 0)
+        printf("%s: <sum %f invstd %f>\n", __func__, sum, invstd);
 
     // compute output
     float w = *(weight + f);
@@ -256,6 +260,10 @@ static void SpatialBatchNormalization(
         for (p = input_plane_ptr, q = output_plane_ptr;
              p < (input_plane_ptr + input_plane_stride) && q < (output_plane_ptr + output_plane_stride);
              p++, q++) {
+#if 0
+            if (f == 0 && i == 0)
+                printf("%f\n", (*p - mean) * invstd);
+#endif
             *q = (float) (((*p - mean) * invstd) * w + b);
         }
     }
@@ -353,7 +361,6 @@ static void SpatialFullConvolution_fixed(
 
     // Add bias and scale down to uint8_t
     long output_plane_size = outputWidth * outputHeight;
-    float scale = input_q->s * weight_q->s / output_q->s;
 
     int ii = 0;
     for (long j = 0; j < nOutputPlane; j++) {
@@ -368,12 +375,17 @@ static void SpatialFullConvolution_fixed(
             }
 #endif
 
+#if 0 // to scale down to 8-bit or not
+            float scale = input_q->s * weight_q->s / output_q->s;
             int32_t result = round(output * scale) + output_q->z;
             if (result < 0)
                 result = 0;
             else if (result > 255)
                 result = 255;
             output_n[idx] = result;
+#else
+            output_n[idx] = output;
+#endif
         }
     }
   }
@@ -382,42 +394,75 @@ static void SpatialFullConvolution_fixed(
 }
 
 static void SpatialBatchNormalization_fixed(
-  int32_t *input,
+  struct Q *input_q,
   int32_t *output,
-  uint8_t *weight,
+  int32_t *weight,
   int32_t *bias,
   long batchSize,
   long nInputPlane, // input->size[1]
   long inputWidth,
-  long inputHeight)
+  long inputHeight,
+  float qscale)
 {
   spatial_batch_norm_layer_fixed++;
 
-  double eps = 0.00001;
+  float eps = 0.00001;
   long nOutputPlane = nInputPlane;
   long n = batchSize * inputWidth * inputHeight;
   long input_plane_stride = inputWidth * inputHeight;
   long output_plane_stride = input_plane_stride;
 
+  int right_shift = 0;
+  switch (n) {
+      case 1024:
+          right_shift = 10;
+          break;
+      case 4096:
+          right_shift = 12;
+          break;
+      case 16384:
+          right_shift = 14;
+          break;
+      case 65536:
+          right_shift = 16;
+          break;
+      default:
+          printf("!!! n value not expected: %li\n", n);
+          break;
+  }
+
   // The input dimensions are: (batchSize, nInputPlane, kW, kH), the output has the same dimensions.
   // Now we are looping through nInputPlane instead of batchSize, therefore we can't simply use
   // a pointer to point to a continuous memory.
   for (long f = 0; f < nInputPlane; ++f) {
-    int32_t *in = input + f * input_plane_stride;
+    int32_t *in = input_q->q32 + f * input_plane_stride;
     int32_t *out = output + f * output_plane_stride;
 
     int32_t mean, invstd;
 
     // compute mean per input
     // torch: if real = float, accreal = double
-    int32_t sum = 0;
+    int64_t sum = 0; // Note: has to be long long, otherwise it will overflow when summing squares below
     for (int i = 0; i < batchSize; i++) {
         int32_t *plane_ptr = in + i * nInputPlane * input_plane_stride;
         for (int32_t *p = plane_ptr; p < (plane_ptr + input_plane_stride); p++)
             sum += *p;
     }
 
-    mean = (int32_t) sum / n;
+    // the divisions by n can be simply done by right shifts, since the n values
+    // are 2^10, 2^12, 2^14, 2^16 for each BN layer in our network
+    mean = sum >> right_shift;
+
+    // depends on the input is scaled to uint8_t or not
+    if (f == 0) {
+#if 0 // uint8_t (q)
+        printf("%s: sum %lli mean %i, dequantized: <sum %f mean %f>\n", __func__, sum, mean,
+                input_q->s * (sum - n * input_q->z), input_q->s * (mean - input_q->z));
+#else // int32_t (A)
+        printf("%s: sum %lli mean %i, dequantized: <sum %f mean %f>\n", __func__, sum, mean,
+                qscale * sum, qscale * mean);
+#endif
+    }
 
     // compute variance per input
     sum = 0;
@@ -427,7 +472,14 @@ static void SpatialBatchNormalization_fixed(
             sum += (*p - mean) * (*p - mean);
     }
 
-    invstd = (int32_t) (1 / sqrt(sum/n + eps));
+    float invstd_f = (1 / sqrtf((float)(sum >> right_shift) + eps));
+    if (f == 0) {
+#if 0 // uint8_t (q)
+#else // int32_t (A)
+        printf("%s: sum %lli, dequantized: <sum %f invstd: %f>\n", __func__, sum,
+                qscale * qscale * sum, invstd_f / qscale);
+#endif
+    }
 
     // compute output
     int32_t w = *(weight + f);
@@ -441,7 +493,11 @@ static void SpatialBatchNormalization_fixed(
         for (p = input_plane_ptr, q = output_plane_ptr;
              p < (input_plane_ptr + input_plane_stride) && q < (output_plane_ptr + output_plane_stride);
              p++, q++) {
-            *q = (int32_t) (((*p - mean) * invstd) * w + b);
+#if 0 // this is actually approx. equal to the actual float values according to our derivation
+            if (f == 0 && i == 0)
+                printf("%f\n", (*p - mean) * invstd_f);
+#endif
+            *q = (int32_t)((*p - mean) * invstd_f * w) + b;
         }
     }
   }
@@ -462,7 +518,8 @@ static struct Q *forward_SpatialFullConvolution(
     int dW,
     int dH,
     int padW,
-    int padH)
+    int padH,
+    float *qscale)
 {
     char path[256];
     long outputHeight = (inputHeight - 1) * dH - 2*padH + (dilationH * (kH - 1) + 1);
@@ -491,7 +548,8 @@ static struct Q *forward_SpatialFullConvolution(
     // ----------
 
     struct Q *weight_q = quantize(weight, weight_size);
-    struct Q *bias_q = quantize_bias(bias, nOutputPlane, input_q->s * weight_q->s);
+    *qscale = input_q->s * weight_q->s;
+    struct Q *bias_q = quantize_int32(bias, nOutputPlane, *qscale);
     struct Q *output_q = quantize(output, output_size);
 
     // save to .mem file, used to initialize BRAM
@@ -578,7 +636,8 @@ static struct Q *forward_SpatialBatchNormalization(
     long batchSize,
     long nInputPlane,
     long inputWidth,
-    long inputHeight)
+    long inputHeight,
+    float qscale)
 {
     printf("\n");
     char path[256];
@@ -606,19 +665,31 @@ static struct Q *forward_SpatialBatchNormalization(
 
     // ----------
 
-    struct Q *weight_q = quantize(weight, nInputPlane);
-    struct Q *bias_q = quantize_bias(bias, nInputPlane, input_q->s * weight_q->s);
+    struct Q *weight_q = quantize_int32(weight, nInputPlane, qscale);
+    struct Q *bias_q = quantize_int32(bias, nInputPlane, qscale);
     struct Q *output_q = quantize(output, output_size);
 
-    printf("weight_q: min %f max %f scale %f zero_point %i\n", weight_q->min, weight_q->max, weight_q->s, weight_q->z);
-    printf("bias_q: scale %f zero_point %i\n", bias_q->s, bias_q->z);
+    sprintf(path, "../bin/weight_%i_int32.mem", layer);
+    save_txt(path, weight_q->q32, nInputPlane);
+    sprintf(path, "../bin/bias_%i_int32.mem", layer);
+    save_txt(path, bias_q->q32, nInputPlane);
+
+    printf("quantization scale for BN weight and bias: %f\n", qscale);
     printf("output_q: min %f max %f scale %f zero_point %i\n", output_q->min, output_q->max, output_q->s, output_q->z);
 
     int32_t *output_fixed = calloc(output_size, sizeof(int32_t));
 
     SpatialBatchNormalization_fixed(
-        input_q->q32, output_fixed, weight_q->q, bias_q->q32,
-        batchSize, nInputPlane, inputWidth, inputHeight);
+        input_q, output_fixed, weight_q->q32, bias_q->q32,
+        batchSize, nInputPlane, inputWidth, inputHeight, qscale);
+
+    for (int i = 0; i < 10; i++)
+        printf("%f ", output[i]);
+    printf("\n");
+
+    for (int i = 0; i < 10; i++)
+        printf("%f ", output_fixed[i] * qscale);
+    printf("\n");
 
     free_q(input_q);
     free_q(weight_q);
@@ -638,15 +709,16 @@ int main(void)
     printf("input_1q: min %f max %f scale %f zero_point %i\n", input_1q->min, input_1q->max, input_1q->s, input_1q->z);
 
     // (64, 100, 1, 1) -> (64, 512, 4, 4)
+    float qscale = 0.0f;
     struct Q *output_1q = forward_SpatialFullConvolution(
-        1, input_1q, 64, 100, 1, 1, 512, 4, 4, 1, 1, 0, 0);
+        1, input_1q, 64, 100, 1, 1, 512, 4, 4, 1, 1, 0, 0, &qscale);
 
     // output_1q->q is the quantized values from output_1q->f
     // output_1q->q32 is the actual output of SpatialFullConvolution_fixed
     //
     // (64, 512, 4, 4) -> (64, 512, 4, 4)
     struct Q *output_2q = forward_SpatialBatchNormalization(
-        2, output_1q, 64, 512, 4, 4);
+        2, output_1q, 64, 512, 4, 4, qscale);
 
     free_q(output_2q);
 
