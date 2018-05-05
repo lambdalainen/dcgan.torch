@@ -1,0 +1,7 @@
+Output of test-full.c and test-fusion.c at commit 8775f0
+
+It seems that the float values are equally off between these two
+versions, but the diff is significantly smaller in test-fusion.c.
+
+Also, there are many values of 0.0000... for ReLU dequantized
+output in test-full.c, investigation needed.

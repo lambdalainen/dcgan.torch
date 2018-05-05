@@ -1,0 +1,186 @@
+input_1q: min -4.022607 max 4.124097 scale 0.031948 zero_point 126
+
+===>>> 1
+kW 4, kH 4, dW 1, dH 1, padW 0, padH 0, dilationW 1, dilationH 1
+nInputPlane 100, nOutputPlane 512
+inputHeight 1, inputWidth 1, outputHeight 4, outputWidth 4, batchSize 64
+### finished: spatial_full_conv_layer 1
+input_q: min -4.022607 max 4.124097 scale 0.031948 zero_point 126
+weight_q: min -0.585235 max 0.490944 scale 0.004220 zero_point 139
+bias_q: scale 0.000135 zero_point 0
+output_q: min -4.597916 max 4.922699 scale 0.037336 zero_point 123
+term_4: 1751400
+kW 4, kH 4, dW 1, dH 1, padW 0, padH 0, dilationW 1, dilationH 1
+nInputPlane 100, nOutputPlane 512
+inputHeight 1, inputWidth 1, outputHeight 4, outputWidth 4, batchSize 64
+### finished: spatial_full_conv_layer_fixed 1
+
+SpatialBatchNormalization: <sum 52.239556 mean 0.051015>
+SpatialBatchNormalization: <sum 868.874378 invstd 1.085598>
+### finished: spatial_batch_norm_layer 1
+First 10 inputs to BN layer (float vs dequantized):
+0.582814 0.049992 0.662594 -0.055536 0.435522 -0.139455 0.582854 1.057717 -0.311175 -0.408456 
+0.571139 0.045707 0.657700 -0.054606 0.415950 -0.134830 0.612667 1.079313 -0.289480 -0.412175 
+SpatialBatchNormalization: <sum 52.525808 mean 0.051295>
+SpatialBatchNormalization: <sum 869.852615 invstd 1.084987>
+### finished: spatial_batch_norm_layer 1
+First 10 output values (output vs output2):
+-0.634183 -1.060302 -0.570380 -1.144697 -0.751978 -1.211811 -0.634152 -0.254384 -1.349142 -1.426942 
+-0.643977 -1.063950 -0.574790 -1.144130 -0.768019 -1.208252 -0.610785 -0.237799 -1.331862 -1.429931 
+--- float diffs:
+sum diff: 0.000033 average diff: 0.000000
+average absolute diff: 0.007915, RMS diff: 0.010237
+
+### finished: relu_layer 1
+### finished: relu_layer 1
+Non-zero values from the first 100 outputs (output vs output2):
+0.225017 0.041919 0.076084 0.325560 1.118042 0.545619 0.420124 0.054800 0.062282 0.046574 0.088381 
+0.225577 0.035268 0.072441 0.321663 1.119722 0.556744 0.427715 0.040543 0.073144 0.048534 0.100185 
+--- float diffs:
+sum diff: 2.928729 average diff: 0.000006
+average absolute diff: 0.000668, RMS diff: 0.003006
+output_q: min 0.000000 max 3.210291 scale 0.012589 zero_point 0
+
+===>>> 4
+kW 4, kH 4, dW 2, dH 2, padW 1, padH 1, dilationW 1, dilationH 1
+nInputPlane 512, nOutputPlane 256
+inputHeight 4, inputWidth 4, outputHeight 8, outputWidth 8, batchSize 64
+### finished: spatial_full_conv_layer 2
+input_q: min 0.000000 max 3.210291 scale 0.012589 zero_point 0
+weight_q: min -1.096758 max 1.492763 scale 0.010155 zero_point 108
+bias_q: scale 0.000128 zero_point 0
+output_q: min -44.735188 max 15.453083 scale 0.236032 zero_point 190
+term_4: 0
+kW 4, kH 4, dW 2, dH 2, padW 1, padH 1, dilationW 1, dilationH 1
+nInputPlane 512, nOutputPlane 256
+inputHeight 4, inputWidth 4, outputHeight 8, outputWidth 8, batchSize 64
+### finished: spatial_full_conv_layer_fixed 2
+
+SpatialBatchNormalization: <sum -2174.554268 mean -0.530897>
+SpatialBatchNormalization: <sum 2520.724524 invstd 1.274717>
+### finished: spatial_batch_norm_layer 2
+First 10 inputs to BN layer (float vs dequantized):
+-0.207151 -0.286368 -1.219079 -0.218557 -0.022085 -0.592700 -0.213893 -0.171063 -0.291608 -0.809873 
+-0.213629 -0.267196 -1.204299 -0.190105 -0.006264 -0.583356 -0.219893 -0.166582 -0.288546 -0.835594 
+SpatialBatchNormalization: <sum -2174.046085 mean -0.530773>
+SpatialBatchNormalization: <sum 2528.024167 invstd 1.272875>
+### finished: spatial_batch_norm_layer 2
+First 10 output values (output vs output2):
+-0.554364 -0.652218 -1.804370 -0.568453 -0.325757 -1.030622 -0.562691 -0.509785 -0.658690 -1.298890 
+-0.563084 -0.629159 -1.785064 -0.534069 -0.307303 -1.019139 -0.570812 -0.505053 -0.655494 -1.330271 
+--- float diffs:
+sum diff: 0.003203 average diff: 0.000000
+average absolute diff: 0.011142, RMS diff: 0.016023
+
+### finished: relu_layer 2
+### finished: relu_layer 2
+Non-zero values from the first 100 outputs (output vs output2):
+0.403456 0.000296 0.415065 1.218127 0.175510 0.251420 0.414566 0.211567 0.469734 0.019857 1.364226 0.667173 0.442219 1.266389 0.085257 0.479513 0.295890 1.174964 0.485999 0.413449 
+0.410998 0.018653 0.452472 1.242210 0.157267 0.187229 0.337513 0.154586 0.419127 1.361332 0.658456 0.418144 1.237858 0.075737 0.474659 0.274154 1.156526 0.505251 0.373055 
+--- float diffs:
+sum diff: 52.062149 average diff: 0.000050
+average absolute diff: 0.001309, RMS diff: 0.005141
+output_q: min 0.000000 max 9.874811 scale 0.038725 zero_point 0
+
+===>>> 7
+kW 4, kH 4, dW 2, dH 2, padW 1, padH 1, dilationW 1, dilationH 1
+nInputPlane 256, nOutputPlane 128
+inputHeight 8, inputWidth 8, outputHeight 16, outputWidth 16, batchSize 64
+### finished: spatial_full_conv_layer 3
+input_q: min 0.000000 max 9.874811 scale 0.038725 zero_point 0
+weight_q: min -1.591324 max 1.327411 scale 0.011446 zero_point 139
+bias_q: scale 0.000443 zero_point 0
+output_q: min -42.922333 max 26.045162 scale 0.270461 zero_point 159
+term_4: 0
+kW 4, kH 4, dW 2, dH 2, padW 1, padH 1, dilationW 1, dilationH 1
+nInputPlane 256, nOutputPlane 128
+inputHeight 8, inputWidth 8, outputHeight 16, outputWidth 16, batchSize 64
+### finished: spatial_full_conv_layer_fixed 3
+
+SpatialBatchNormalization: <sum -1396.872612 mean -0.085258>
+SpatialBatchNormalization: <sum 15887.160088 invstd 1.015511>
+### finished: spatial_batch_norm_layer 3
+First 10 inputs to BN layer (float vs dequantized):
+0.069179 -0.440497 0.104825 -0.659083 -2.300815 -1.999394 -3.215888 0.728110 -0.007211 -2.442695 
+0.053189 -0.397590 0.080227 -0.607245 -2.308416 -2.006124 -3.177619 0.744207 -0.046097 -2.466655 
+SpatialBatchNormalization: <sum -1416.941735 mean -0.086483>
+SpatialBatchNormalization: <sum 16050.519584 invstd 1.010330>
+### finished: spatial_batch_norm_layer 3
+First 10 output values (output vs output2):
+0.050957 -0.289340 0.074756 -0.435284 -1.531423 -1.330172 -2.142392 0.490907 -0.000047 -1.626152 
+0.040623 -0.258815 0.058583 -0.398081 -1.528111 -1.327309 -2.105493 0.499642 -0.025330 -1.633224 
+--- float diffs:
+sum diff: -0.008069 average diff: -0.000000
+average absolute diff: 0.015973, RMS diff: 0.024259
+
+### finished: relu_layer 3
+### finished: relu_layer 3
+Non-zero values from the first 100 outputs (output vs output2):
+0.050957 0.074756 0.490907 0.048956 0.087774 0.017000 0.155562 0.414707 0.174713 0.023367 0.370111 0.015094 0.168203 0.264126 0.138721 0.040694 0.384316 0.019112 0.142365 0.225189 0.274598 0.111447 0.136539 0.152476 0.187133 0.055024 0.003837 
+0.040623 0.058583 0.499642 0.020013 0.090971 0.008235 0.133958 0.428095 0.146030 0.024724 0.375981 0.164579 0.277641 0.078899 0.059466 0.377748 0.017363 0.161634 0.224054 0.265863 0.122475 0.124830 0.147796 0.176945 0.074188 0.036501 
+--- float diffs:
+sum diff: 326.927185 average diff: 0.000156
+average absolute diff: 0.003544, RMS diff: 0.009713
+output_q: min 0.000000 max 11.725129 scale 0.045981 zero_point 0
+
+===>>> 10
+kW 4, kH 4, dW 2, dH 2, padW 1, padH 1, dilationW 1, dilationH 1
+nInputPlane 128, nOutputPlane 64
+inputHeight 16, inputWidth 16, outputHeight 32, outputWidth 32, batchSize 64
+### finished: spatial_full_conv_layer 4
+input_q: min 0.000000 max 11.725129 scale 0.045981 zero_point 0
+weight_q: min -1.908465 max 1.500831 scale 0.013370 zero_point 143
+bias_q: scale 0.000615 zero_point 0
+output_q: min -28.693254 max 17.372107 scale 0.180648 zero_point 159
+term_4: 0
+kW 4, kH 4, dW 2, dH 2, padW 1, padH 1, dilationW 1, dilationH 1
+nInputPlane 128, nOutputPlane 64
+inputHeight 16, inputWidth 16, outputHeight 32, outputWidth 32, batchSize 64
+### finished: spatial_full_conv_layer_fixed 4
+
+SpatialBatchNormalization: <sum -51421.835248 mean -0.784635>
+SpatialBatchNormalization: <sum 120732.127076 invstd 0.736762>
+### finished: spatial_batch_norm_layer 4
+First 10 inputs to BN layer (float vs dequantized):
+0.007184 0.308650 -0.115802 0.081734 -0.314186 0.019864 -0.293154 0.183967 -0.348183 0.095759 
+0.019057 0.296312 -0.124180 0.082992 -0.303074 0.000000 -0.268648 0.176435 -0.327664 0.061475 
+SpatialBatchNormalization: <sum -52182.198932 mean -0.796237>
+SpatialBatchNormalization: <sum 121155.811883 invstd 0.735473>
+### finished: spatial_batch_norm_layer 4
+First 10 output values (output vs output2):
+0.020970 0.227595 -0.063325 0.072067 -0.199298 0.029660 -0.184882 0.142137 -0.222600 0.081679 
+0.036082 0.225780 -0.061922 0.079826 -0.184321 0.023043 -0.160767 0.143760 -0.201146 0.065104 
+--- float diffs:
+sum diff: 0.003936 average diff: 0.000000
+average absolute diff: 0.033306, RMS diff: 0.048275
+
+### finished: relu_layer 4
+### finished: relu_layer 4
+Non-zero values from the first 100 outputs (output vs output2):
+0.020970 0.227595 0.072067 0.029660 0.142137 0.081679 0.027347 0.166638 0.188268 0.176892 0.187876 0.221334 0.018141 0.222293 0.004153 0.164051 0.050190 0.003311 0.097198 
+0.036082 0.225780 0.079826 0.023043 0.143760 0.065104 0.012527 0.155537 0.166053 0.165632 0.183298 0.220312 0.027670 0.217368 0.029773 0.168156 0.068469 0.102119 
+--- float diffs:
+sum diff: 865.540405 average diff: 0.000206
+average absolute diff: 0.003885, RMS diff: 0.012045
+output_q: min 0.000000 max 15.381378 scale 0.060319 zero_point 0
+
+===>>> 13
+kW 4, kH 4, dW 2, dH 2, padW 1, padH 1, dilationW 1, dilationH 1
+nInputPlane 64, nOutputPlane 3
+inputHeight 32, inputWidth 32, outputHeight 64, outputWidth 64, batchSize 64
+### finished: spatial_full_conv_layer 5
+input_q: min 0.000000 max 15.381378 scale 0.060319 zero_point 0
+weight_q: min -11.941438 max 4.169560 scale 0.063180 zero_point 189
+bias_q: scale 0.003811 zero_point 0
+output_q: min -3.692468 max 9.850686 scale 0.053110 zero_point 70
+term_4: 0
+kW 4, kH 4, dW 2, dH 2, padW 1, padH 1, dilationW 1, dilationH 1
+nInputPlane 64, nOutputPlane 3
+inputHeight 32, inputWidth 32, outputHeight 64, outputWidth 64, batchSize 64
+### finished: spatial_full_conv_layer_fixed 5
+
+First 10 inputs to Tanh layer (float vs dequantized):
+0.298151 0.711288 0.359151 0.022435 0.155467 0.119805 0.347377 0.888529 1.035560 0.995212 
+0.339178 0.746953 0.304879 0.053354 0.243903 0.171494 0.358233 0.914637 1.070887 0.918448 
+### finished: tanh_layer 1
+output_q: min -0.999503 max 1.000000 scale 0.007841 zero_point 127
