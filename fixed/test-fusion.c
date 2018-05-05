@@ -707,10 +707,7 @@ static struct Q *forward_ReLU(
     long batchSize,
     long nInputPlane,
     long inputWidth,
-    long inputHeight,
-    float scale_axb,
-    float scale_res,
-    uint8_t zero_offset_res)
+    long inputHeight)
 {
     printf("\n");
     char path[256];
@@ -797,8 +794,6 @@ static struct Q *forward_Tanh(
 int main(void)
 {
     float scale_axb = 0.0f; // S_A * S_B
-    float scale_res; // S_R
-    uint8_t zero_offset_res;
 
     float *input_1f = calloc(64 * 100, sizeof(float));
     read_bin(float, "../bin/input_1.bin", input_1f, 64 * 100);
@@ -809,45 +804,37 @@ int main(void)
 
     struct Q *output_1q = forward_SpatialFullConvolution(
         1, input_1q, 64, 100, 1, 1, 512, 4, 4, 1, 1, 0, 0, &scale_axb);
-    scale_res = output_1q->s;
-    zero_offset_res = output_1q->z;
 
     // output_1q->q is the quantized values from output_1q->f
     // output_1q->q32 is the actual output of SpatialFullConvolution_fixed
     struct Q *output_2q = forward_SpatialBatchNormalization(
         2, output_1q, 64, 512, 4, 4, scale_axb);
 
-    struct Q *output_3q = forward_ReLU(3, output_2q, 64, 512, 4, 4, scale_axb, scale_res, zero_offset_res);
+    struct Q *output_3q = forward_ReLU(3, output_2q, 64, 512, 4, 4);
 
     struct Q *output_4q = forward_SpatialFullConvolution(
         4, output_3q, 64, 512, 4, 4, 256, 4, 4, 2, 2, 1, 1, &scale_axb);
-    scale_res = output_4q->s;
-    zero_offset_res = output_4q->z;
 
     struct Q *output_5q = forward_SpatialBatchNormalization(
         5, output_4q, 64, 256, 8, 8, scale_axb);
 
-    struct Q *output_6q = forward_ReLU(6, output_5q, 64, 256, 8, 8, scale_axb, scale_res, zero_offset_res);
+    struct Q *output_6q = forward_ReLU(6, output_5q, 64, 256, 8, 8);
 
     struct Q *output_7q = forward_SpatialFullConvolution(
         7, output_6q, 64, 256, 8, 8, 128, 4, 4, 2, 2, 1, 1, &scale_axb);
-    scale_res = output_7q->s;
-    zero_offset_res = output_7q->z;
 
     struct Q *output_8q = forward_SpatialBatchNormalization(
         8, output_7q, 64, 128, 16, 16, scale_axb);
 
-    struct Q *output_9q = forward_ReLU(9, output_8q, 64, 128, 16, 16, scale_axb, scale_res, zero_offset_res);
+    struct Q *output_9q = forward_ReLU(9, output_8q, 64, 128, 16, 16);
 
     struct Q *output_10q = forward_SpatialFullConvolution(
         10, output_9q, 64, 128, 16, 16, 64, 4, 4, 2, 2, 1, 1, &scale_axb);
-    scale_res = output_10q->s;
-    zero_offset_res = output_10q->z;
 
     struct Q *output_11q = forward_SpatialBatchNormalization(
         11, output_10q, 64, 64, 32, 32, scale_axb);
 
-    struct Q *output_12q = forward_ReLU(12, output_11q, 64, 64, 32, 32, scale_axb, scale_res, zero_offset_res);
+    struct Q *output_12q = forward_ReLU(12, output_11q, 64, 64, 32, 32);
 
     struct Q *output_13q = forward_SpatialFullConvolution(
         13, output_12q, 64, 64, 32, 32, 3, 4, 4, 2, 2, 1, 1, &scale_axb);
