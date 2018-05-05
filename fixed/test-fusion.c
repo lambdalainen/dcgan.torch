@@ -744,7 +744,8 @@ static struct Q *forward_ReLU(
     printf("output_q: min %f max %f scale %f zero_point %i\n", output_q->min, output_q->max, output_q->s, output_q->z);
 
     free_q(input_q);
-    free(output);
+    free(output2);
+    output_q->f = output; // pass the original f down
     return output_q;
 }
 
