@@ -3,6 +3,7 @@
 
 struct Q {
     float *f;     // original data
+    float *f2;    // for fusion
     uint8_t *q;   // quantized data
     int32_t *q32; // quantized data
     float min;

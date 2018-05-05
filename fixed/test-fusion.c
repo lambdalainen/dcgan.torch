@@ -29,15 +29,13 @@ static int dilationH = 1;
 static int spatial_full_conv_layer;
 static int spatial_full_conv_layer_fixed;
 static int spatial_batch_norm_layer;
-static int spatial_batch_norm_layer_fixed;
 static int relu_layer;
-static int relu_layer_fixed;
 static int tanh_layer;
-//static int tanh_layer_fixed;
 
 static void free_q(struct Q *q)
 {
     free(q->f);
+    free(q->f2);
     free(q->q);
     free(q->q32);
     free(q);
@@ -103,13 +101,13 @@ static struct Q *quantize_int32(float *data, long count, float scale)
     return q;
 }
 
-static void compare_output_float(float *output_float, float *output_deq, int output_count)
+static void compare_output_float(float *output, float *output_2, int output_count)
 {
     float diff_sum = 0.0f;
     float diff_abs_sum = 0.0f;
     float diff_squared_sum = 0.0f;
     for (int i = 0; i < output_count; i++) {
-        float diff = output_deq[i] - output_float[i];
+        float diff = output_2[i] - output[i];
         diff_sum += diff;
         diff_abs_sum += fabsf(diff);
         diff_squared_sum += diff * diff;
@@ -251,9 +249,11 @@ static void SpatialBatchNormalization(
   long batchSize,
   long nInputPlane, // input->size[1]
   long inputWidth,
-  long inputHeight)
+  long inputHeight,
+  int increase_layer)
 {
-  spatial_batch_norm_layer++;
+  if (increase_layer)
+    spatial_batch_norm_layer++;
 
   double eps = 0.00001;
   long nOutputPlane = nInputPlane;
@@ -440,125 +440,14 @@ static void SpatialFullConvolution_fixed(
   printf("### finished: spatial_full_conv_layer_fixed %i\n", spatial_full_conv_layer_fixed);
 }
 
-static void SpatialBatchNormalization_fixed(
-  struct Q *input_q,
-  int32_t *output,
-  int32_t *weight,
-  int32_t *bias,
-  long batchSize,
-  long nInputPlane, // input->size[1]
-  long inputWidth,
-  long inputHeight,
-  float scale_axb)
-{
-  spatial_batch_norm_layer_fixed++;
-
-  float eps = 0.00001;
-  long nOutputPlane = nInputPlane;
-  long n = batchSize * inputWidth * inputHeight;
-  long input_plane_stride = inputWidth * inputHeight;
-  long output_plane_stride = input_plane_stride;
-
-  int right_shift = 0;
-  switch (n) {
-      case 1024:
-          right_shift = 10;
-          break;
-      case 4096:
-          right_shift = 12;
-          break;
-      case 16384:
-          right_shift = 14;
-          break;
-      case 65536:
-          right_shift = 16;
-          break;
-      default:
-          printf("!!! n value not expected: %li\n", n);
-          break;
-  }
-
-  // The input dimensions are: (batchSize, nInputPlane, kW, kH), the output has the same dimensions.
-  // Now we are looping through nInputPlane instead of batchSize, therefore we can't simply use
-  // a pointer to point to a continuous memory.
-  for (long f = 0; f < nInputPlane; ++f) {
-    int32_t *in = input_q->q32 + f * input_plane_stride;
-    int32_t *out = output + f * output_plane_stride;
-
-    int32_t mean;
-
-    // compute mean per input
-    // torch: if real = float, accreal = double
-    int64_t sum = 0; // Note: has to be long long, otherwise it will overflow when summing squares below
-    for (int i = 0; i < batchSize; i++) {
-        int32_t *plane_ptr = in + i * nInputPlane * input_plane_stride;
-        for (int32_t *p = plane_ptr; p < (plane_ptr + input_plane_stride); p++)
-            sum += *p;
-    }
-
-    // the divisions by n can be simply done by right shifts, since the n values
-    // are 2^10, 2^12, 2^14, 2^16 for each BN layer in our network
-    mean = sum >> right_shift;
-
-    // depends on the input is scaled to uint8_t or not
-    if (f == 0) {
-#if 0 // uint8_t (q)
-        printf("%s: sum %lli mean %i, dequantized: <sum %f mean %f>\n", __func__, sum, mean,
-                input_q->s * (sum - n * input_q->z), input_q->s * (mean - input_q->z));
-#else // int32_t (A)
-        printf("%s: sum %lli mean %i, dequantized: <sum %f mean %f>\n", __func__, sum, mean,
-                scale_axb * sum, scale_axb * mean);
-#endif
-    }
-
-    // compute variance per input
-    sum = 0;
-    for (int i = 0; i < batchSize; i++) {
-        int32_t *plane_ptr = in + i * nInputPlane * input_plane_stride;
-        for (int32_t *p = plane_ptr; p < (plane_ptr + input_plane_stride); p++)
-            sum += (*p - mean) * (*p - mean);
-    }
-
-    float invstd_f = (1 / sqrtf((float)(sum >> right_shift) + eps));
-    if (f == 0) {
-#if 0 // uint8_t (q)
-#else // int32_t (A)
-        printf("%s: sum %lli, dequantized: <sum %f invstd: %f>\n", __func__, sum,
-                scale_axb * scale_axb * sum, invstd_f / scale_axb);
-#endif
-    }
-
-    // compute output
-    int32_t w = *(weight + f);
-    int32_t b = *(bias + f);
-
-    // write output
-    for (int i = 0; i < batchSize; i++) {
-        int32_t *input_plane_ptr = in + i * nInputPlane * input_plane_stride;
-        int32_t *output_plane_ptr = out + i * nOutputPlane * output_plane_stride;
-        int32_t *p, *q;
-        for (p = input_plane_ptr, q = output_plane_ptr;
-             p < (input_plane_ptr + input_plane_stride) && q < (output_plane_ptr + output_plane_stride);
-             p++, q++) {
-#if 0 // this is actually approx. equal to the actual float values according to our derivation
-            if (f == 0 && i == 0)
-                printf("%f\n", (*p - mean) * invstd_f);
-#endif
-            // So on FPGA, (*p - mean) and w are converted to float and then multiplied with invstd_f,
-            // converted back to int32 and then added with b to produce the result
-            *q = (int32_t)((*p - mean) * invstd_f * w) + b;
-        }
-    }
-  }
-  printf("### finished: spatial_batch_norm_layer_fixed %i\n", spatial_batch_norm_layer_fixed);
-}
-
 static void ReLU(
     float *input,
     float *output,
-    long count)
+    long count,
+    int increase_layer)
 {
-    relu_layer++;
+    if (increase_layer)
+        relu_layer++;
 
     float *p, *q;
     for (p = input, q = output;
@@ -567,33 +456,6 @@ static void ReLU(
         *q = *p > 0 ? *p : 0;
     }
     printf("### finished: relu_layer %i\n", relu_layer);
-}
-
-static void ReLU_fixed(
-    struct Q *input_q,
-    uint8_t *output,
-    long count,
-    float scale_axb,
-    float scale_res,
-    uint8_t zero_offset_res)
-{
-    relu_layer_fixed++;
-
-    float scale = scale_axb / scale_res;
-    int32_t *p;
-    uint8_t *q;
-    for (p = input_q->q32, q = output;
-         p < (input_q->q32 + count) && q < (output + count);
-         p++, q++) {
-        int32_t x = *p > 0 ? *p : 0;
-        uint8_t result = round(x * scale) + zero_offset_res;
-        if (result < 0)
-            result = 0;
-        else if (result > 255)
-            result = 255;
-        *q = result;
-    }
-    printf("### finished: relu_layer_fixed %i\n", relu_layer_fixed);
 }
 
 static void Tanh(
@@ -787,59 +649,55 @@ static struct Q *forward_SpatialBatchNormalization(
 
     SpatialBatchNormalization(
         input_q->f, output, weight, bias,
-        batchSize, nInputPlane, inputWidth, inputHeight);
+        batchSize, nInputPlane, inputWidth, inputHeight, 1);
 
     sprintf(path, "../bin/output_%i_test.bin", layer);
     save_bin(float, path, output, output_count);
 
     // ----------
 
-    struct Q *weight_q = quantize_int32(weight, nInputPlane, scale_axb);
-    struct Q *bias_q = quantize_int32(bias, nInputPlane, scale_axb);
-    struct Q *output_q = quantize(output, output_count);
+    float *input_deq = calloc(output_count, sizeof(float));
+    for (int i = 0; i < output_count; i++) {
+        input_deq[i] = scale_axb * input_q->q32[i];
+    }
+    printf("First 10 inputs to BN layer (float vs dequantized):\n");
+    for (int i = 0; i < 10; i++)
+        printf("%f ", input_q->f[i]);
+    printf("\n");
+    for (int i = 0; i < 10; i++)
+        printf("%f ", input_deq[i]);
+    printf("\n");
 
+    /*
     sprintf(path, "../bin/weight_%i_int32.mem", layer);
     save_txt(path, weight_q->q32, nInputPlane);
     sprintf(path, "../bin/bias_%i_int32.mem", layer);
     save_txt(path, bias_q->q32, nInputPlane);
+    */
 
-    printf("quantization scale for BN weight and bias: %f\n", scale_axb);
-    printf("output_q: min %f max %f scale %f zero_point %i\n", output_q->min, output_q->max, output_q->s, output_q->z);
+    struct Q *output_q = quantize(output, output_count);
 
-    int32_t *output_fixed = calloc(output_count, sizeof(int32_t));
+    float *output2 = calloc(output_count, sizeof(float));
+    SpatialBatchNormalization(
+        input_deq, output2, weight, bias,
+        batchSize, nInputPlane, inputWidth, inputHeight, 0);
 
-    SpatialBatchNormalization_fixed(
-        input_q, output_fixed, weight_q->q32, bias_q->q32,
-        batchSize, nInputPlane, inputWidth, inputHeight, scale_axb);
-
-    // output dequantized
-    float *output_deq = calloc(output_count, sizeof(float));
-    for (int i = 0; i < output_count; i++) {
-        output_deq[i] = scale_axb * output_fixed[i];
-    }
-
-    printf("First 10 output values (float vs dequantized):\n");
+    printf("First 10 output values (output vs output2):\n");
     for (int i = 0; i < 10; i++)
         printf("%f ", output[i]);
     printf("\n");
     for (int i = 0; i < 10; i++)
-        printf("%f ", output_deq[i]);
+        printf("%f ", output2[i]);
     printf("\n");
 
-    // At this point we have 2 groups of data we can compare:
-    // - output_fixed (scaled down from int32_t to uint8_t) vs output_q->q (quantized uint8_t from
-    //   original float output)
-    // - output vs output_deq: original float output vs dequantized float from uint8_t
-    //
-    // Here we only compare the floating data
-    compare_output_float(output, output_deq, output_count);
+    compare_output_float(output, output2, output_count);
 
-    free(output_deq);
     free_q(input_q);
-    free_q(weight_q);
-    free_q(bias_q);
+    free(input_deq);
+    free(weight);
+    free(bias);
 
-    output_q->q32 = output_fixed;
+    output_q->f2 = output2;
     return output_q;
 }
 
@@ -860,58 +718,36 @@ static struct Q *forward_ReLU(
     long output_count = batchSize * nInputPlane * inputWidth * inputHeight;
     float *output = calloc(output_count, sizeof(float));
 
-    ReLU(input_q->f, output, output_count);
+    ReLU(input_q->f, output, output_count, 1);
 
     sprintf(path, "../bin/output_%i_test.bin", layer);
     save_bin(float, path, output, output_count);
 
     // ----------
-    //
-    struct Q *output_q = quantize(output, output_count);
-    printf("output_q: min %f max %f scale %f zero_point %i\n", output_q->min, output_q->max, output_q->s, output_q->z);
 
-    uint8_t *output_fixed = calloc(output_count, sizeof(uint8_t));
+    float *output2 = calloc(output_count, sizeof(float));
+    ReLU(input_q->f2, output2, output_count, 0);
 
-    // TODO: also try output from BN, but this seems to be better
-    //scale_res = output_q->s;
-    //zero_offset_res = output_q->z;
-    ReLU_fixed(input_q, output_fixed, output_count, scale_axb, scale_res, zero_offset_res);
-
-    // output dequantized
-    float *output_deq = calloc(output_count, sizeof(float));
-    for (int i = 0; i < output_count; i++) {
-        output_deq[i] = scale_res * (output_fixed[i] - zero_offset_res);
-    }
-
-    printf("Non-zero values from the first 100 outputs (float vs dequantized):\n");
+    printf("Non-zero values from the first 100 outputs (output vs output2):\n");
     for (int i = 0; i < 100; i++)
         if (output[i] != 0.0f)
             printf("%f ", output[i]);
     printf("\n");
     for (int i = 0; i < 100; i++)
-        if (output[i] != 0.0f)
-            printf("%f ", output_deq[i]);
+        if (output2[i] != 0.0f)
+            printf("%f ", output2[i]);
     printf("\n");
-#if 0
-    for (int i = 0; i < 100; i++)
-        if (output_fixed[i] != zero_offset_res)
-            printf("%i ", output_fixed[i]);
-    printf("\n");
-    for (int i = 0; i < 100; i++)
-        if (output_q->q[i] != output_q->z)
-            printf("%i ", output_q->q[i]);
-    printf("\n");
-#endif
 
-    compare_output_float(output, output_deq, output_count);
+    compare_output_float(output, output2, output_count);
 
-    free(output_deq);
+    // Since it's just regular floating-point computation for BN and ReLU, here we simply need to
+    // quantize the float data itself. It is possible, of course, to have a predetermined s and z
+    // so we don't have to compute them on FPGA, but let's see how it goes.
+    struct Q *output_q = quantize(output2, output_count);
+    printf("output_q: min %f max %f scale %f zero_point %i\n", output_q->min, output_q->max, output_q->s, output_q->z);
+
     free_q(input_q);
-
-    free(output_q->q);
-    output_q->s = scale_res;
-    output_q->z = zero_offset_res;
-    output_q->q = output_fixed;
+    free(output);
     return output_q;
 }
 
@@ -935,7 +771,7 @@ static struct Q *forward_Tanh(
         input_deq[i] = scale_axb * input_q->q32[i];
     }
 
-    printf("Input to Tanh layer (float vs dequantized):\n");
+    printf("First 10 inputs to Tanh layer (float vs dequantized):\n");
     for (int i = 0; i < 10; i++)
         printf("%f ", input_q->f[i]);
     printf("\n");
