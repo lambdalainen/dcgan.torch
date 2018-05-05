@@ -1,0 +1,18 @@
+Passing int32 vs uint8 to BN:
+
+sum -76.101027 mean -0.074317
+sum 824.984554 invstd 1.114100
+### finished: spatial_batch_norm_layer 1
+weight_q: min 0.232256 max 1.033193 scale 0.003141 zero_point 0
+bias_q: scale 0.000129 zero_point 0
+output_q: min -5.889660 max 2.867342 scale 0.034341 zero_point 172
+z 142 sum -580513 x 143551 dequantized -76.044342
+
+sum -76.101027 mean -0.074317
+sum 824.984554 invstd 1.114100
+### finished: spatial_batch_norm_layer 1
+weight_q: min 0.232256 max 1.033193 scale 0.003141 zero_point 0
+bias_q: scale 0.000129 zero_point 0
+output_q: min -5.889660 max 2.867342 scale 0.034341 zero_point 172
+sum 143539 dequantized -76.535744
+### finished: spatial_batch_norm_layer_fixed 1
