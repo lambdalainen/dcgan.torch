@@ -921,7 +921,8 @@ static struct Q *forward_Tanh(
     long batchSize,
     long nInputPlane,
     long inputWidth,
-    long inputHeight)
+    long inputHeight,
+    float scale_axb)
 {
     printf("\n");
     char path[256];
@@ -929,7 +930,20 @@ static struct Q *forward_Tanh(
     long output_count = batchSize * nInputPlane * inputWidth * inputHeight;
     float *output = calloc(output_count, sizeof(float));
 
-    Tanh(input_q->f, output, output_count);
+    float *input_deq = calloc(output_count, sizeof(float));
+    for (int i = 0; i < output_count; i++) {
+        input_deq[i] = scale_axb * input_q->q32[i];
+    }
+
+    printf("Input to Tanh layer (float vs dequantized):\n");
+    for (int i = 0; i < 10; i++)
+        printf("%f ", input_q->f[i]);
+    printf("\n");
+    for (int i = 0; i < 10; i++)
+        printf("%f ", input_deq[i]);
+    printf("\n");
+
+    Tanh(input_deq, output, output_count);
 
     sprintf(path, "../bin/output_%i_test.bin", layer);
     save_bin(float, path, output, output_count);
@@ -939,6 +953,7 @@ static struct Q *forward_Tanh(
     struct Q *output_q = quantize(output, output_count);
     printf("output_q: min %f max %f scale %f zero_point %i\n", output_q->min, output_q->max, output_q->s, output_q->z);
 
+    free(input_deq);
     free_q(input_q);
     return output_q;
 }
@@ -1001,7 +1016,7 @@ int main(void)
     struct Q *output_13q = forward_SpatialFullConvolution(
         13, output_12q, 64, 64, 32, 32, 3, 4, 4, 2, 2, 1, 1, &scale_axb);
 
-    struct Q *output_14q = forward_Tanh(14, output_13q, 64, 3, 64, 64);
+    struct Q *output_14q = forward_Tanh(14, output_13q, 64, 3, 64, 64, scale_axb);
 
     free_q(output_14q);
 
