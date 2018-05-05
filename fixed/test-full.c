@@ -174,6 +174,20 @@ static void SpatialFullConvolution(
     long n = nOutputPlane * kW * kH;
     long k = nInputPlane;
 
+#if 1
+    // gemm & col2im combined
+    sparse_gemm(
+        m, n, k,
+        input_n, m,
+        weight, n,
+        nOutputPlane,
+        outputHeight, outputWidth,
+        inputHeight, inputWidth,
+        kH, kW, padH, padW, dH, dW,
+        dilationH, dilationW,
+        output_n
+    );
+#else
     // Do GEMM (note: this is a bit confusing because gemm assumes column-major matrices)
     gemm(
         'n', 't',
@@ -193,8 +207,19 @@ static void SpatialFullConvolution(
       dilationH, dilationW,
       output_n
     );
+#endif
 
     // Do Bias after:
+#if 1
+    long output_plane_size = outputWidth * outputHeight;
+
+    for (long j = 0; j < nOutputPlane; j++) {
+        float b = bias[j];
+        for (long k = 0; k < output_plane_size; k++) {
+            output_n[j*output_plane_size + k] += b;
+        }
+    }
+#else
     long m_ = outputHeight * outputWidth;
     long n_ = nOutputPlane;
     long k_ = 1;
@@ -209,6 +234,7 @@ static void SpatialFullConvolution(
         1,
         output_n, m_ // beta == 1: c[j*ldc+i] = beta*c[j*ldc+i]+alpha*sum;
     );
+#endif
   }
 
   free(ones);
@@ -380,14 +406,15 @@ static void SpatialFullConvolution_fixed(
 
     // Add bias and scale down to uint8_t
     long output_plane_area = outputWidth * outputHeight;
+    //float scale = input_q->s * weight_q->s / output_q->s;
 
-    int ii = 0;
+    //int ii = 0;
     for (long j = 0; j < nOutputPlane; j++) {
         int32_t b = bias_q->q32[j];
         for (long k = 0; k < output_plane_area; k++) {
             long idx = j*output_plane_area + k;
             int32_t output = output_n[idx] + b;
-#if 1
+#if 0
             if (elt == 0) {
                 printf("%04i: %08x \t + %i -> %08x\n", ii, output_n[idx], b, output);
                 ii++;
@@ -395,7 +422,6 @@ static void SpatialFullConvolution_fixed(
 #endif
 
 #if 0 // to scale down to 8-bit or not
-            float scale = input_q->s * weight_q->s / output_q->s;
             int32_t result = round(output * scale) + output_q->z;
             if (result < 0)
                 result = 0;
@@ -584,6 +610,7 @@ static struct Q *forward_SpatialFullConvolution(
     int padH,
     float *scale_axb)
 {
+    printf("\n===>>> %i\n", layer);
     char path[256];
     long outputHeight = (inputHeight - 1) * dH - 2*padH + (dilationH * (kH - 1) + 1);
     long outputWidth  = (inputWidth - 1) * dW - 2*padW + (dilationW * (kW - 1) + 1);
@@ -615,9 +642,11 @@ static struct Q *forward_SpatialFullConvolution(
     struct Q *bias_q = quantize_int32(bias, nOutputPlane, *scale_axb);
     struct Q *output_q = quantize(output, output_count);
 
-    // save to .mem file, used to initialize BRAM
-    sprintf(path, "../bin/input_%i_uint8.mem", layer);
-    save_txt(path, input_q->q, nInputPlane); // only save 1 batch
+    if (layer == 1) {
+        // save to .mem file, used to initialize BRAM
+        sprintf(path, "../bin/input_%i_uint8.mem", layer);
+        save_txt(path, input_q->q, nInputPlane); // only save 1 batch
+    }
 
     // transpose weight_q and save to .bin file, used to generate .mcs file to program SPI Flash
     uint8_t *weight_fpga = calloc(weight_count, sizeof(uint8_t));
@@ -633,6 +662,7 @@ static struct Q *forward_SpatialFullConvolution(
     sprintf(path, "../bin/bias_%i_int32.mem", layer);
     save_txt(path, bias_q->q32, nOutputPlane);
 
+    printf("input_q: min %f max %f scale %f zero_point %i\n", input_q->min, input_q->max, input_q->s, input_q->z);
     printf("weight_q: min %f max %f scale %f zero_point %i\n", weight_q->min, weight_q->max, weight_q->s, weight_q->z);
     printf("bias_q: scale %f zero_point %i\n", bias_q->s, bias_q->z);
     printf("output_q: min %f max %f scale %f zero_point %i\n", output_q->min, output_q->max, output_q->s, output_q->z);
@@ -652,6 +682,14 @@ static struct Q *forward_SpatialFullConvolution(
     for (int i = 0; i < output_count; i++) {
         output_deq[i] = output_q->s * (output_fixed[i] - output_q->z);
     }
+
+    printf("First 10 output values (float vs dequantized):\n");
+    for (int i = 0; i < 10; i++)
+        printf("%f ", output[i]);
+    printf("\n");
+    for (int i = 0; i < 10; i++)
+        printf("%f ", output_deq[i]);
+    printf("\n");
 
     // At this point we have 2 groups of data we can compare:
     // output vs output_deq: original float output vs dequantized float from uint8_t
@@ -795,11 +833,11 @@ static struct Q *forward_ReLU(
     struct Q *output_q = quantize(output, output_count);
     printf("output_q: min %f max %f scale %f zero_point %i\n", output_q->min, output_q->max, output_q->s, output_q->z);
 
-    // TODO: also try output from BN
-    //scale_res = output_q->s;
-    //zero_offset_res = output_q->z;
     uint8_t *output_fixed = calloc(output_count, sizeof(uint8_t));
 
+    // TODO: also try output from BN, but this seems to be better
+    //scale_res = output_q->s;
+    //zero_offset_res = output_q->z;
     ReLU_fixed(input_q, output_fixed, output_count, scale_axb, scale_res, zero_offset_res);
 
     // output dequantized
@@ -817,6 +855,16 @@ static struct Q *forward_ReLU(
         if (output[i] != 0.0f)
             printf("%f ", output_deq[i]);
     printf("\n");
+#if 0
+    for (int i = 0; i < 100; i++)
+        if (output_fixed[i] != zero_offset_res)
+            printf("%i ", output_fixed[i]);
+    printf("\n");
+    for (int i = 0; i < 100; i++)
+        if (output_q->q[i] != output_q->z)
+            printf("%i ", output_q->q[i]);
+    printf("\n");
+#endif
 
     compare_output_float(output, output_deq, output_count);
 
@@ -824,12 +872,18 @@ static struct Q *forward_ReLU(
     free_q(input_q);
 
     free(output_q->q);
+    output_q->s = scale_res;
+    output_q->z = zero_offset_res;
     output_q->q = output_fixed;
     return output_q;
 }
 
 int main(void)
 {
+    float scale_axb = 0.0f; // S_A * S_B
+    float scale_res; // S_R
+    uint8_t zero_offset_res;
+
     float *input_1f = calloc(64 * 100, sizeof(float));
     read_bin(float, "../bin/input_1.bin", input_1f, 64 * 100);
 
@@ -838,9 +892,6 @@ int main(void)
     printf("input_1q: min %f max %f scale %f zero_point %i\n", input_1q->min, input_1q->max, input_1q->s, input_1q->z);
 
     // (64, 100, 1, 1) -> (64, 512, 4, 4)
-    float scale_axb = 0.0f; // S_A * S_B
-    float scale_res; // S_R
-    uint8_t zero_offset_res;
     struct Q *output_1q = forward_SpatialFullConvolution(
         1, input_1q, 64, 100, 1, 1, 512, 4, 4, 1, 1, 0, 0, &scale_axb);
     scale_res = output_1q->s;
@@ -856,7 +907,37 @@ int main(void)
     // (64, 512, 4, 4) -> (64, 512, 4, 4)
     struct Q *output_3q = forward_ReLU(3, output_2q, 64, 512, 4, 4, scale_axb, scale_res, zero_offset_res);
 
-    free_q(output_3q);
+    struct Q *output_4q = forward_SpatialFullConvolution(
+        4, output_3q, 64, 512, 4, 4, 256, 4, 4, 2, 2, 1, 1, &scale_axb);
+    scale_res = output_4q->s;
+    zero_offset_res = output_4q->z;
+
+    struct Q *output_5q = forward_SpatialBatchNormalization(
+        5, output_4q, 64, 256, 8, 8, scale_axb);
+
+    struct Q *output_6q = forward_ReLU(6, output_5q, 64, 256, 8, 8, scale_axb, scale_res, zero_offset_res);
+
+    struct Q *output_7q = forward_SpatialFullConvolution(
+        7, output_6q, 64, 256, 8, 8, 128, 4, 4, 2, 2, 1, 1, &scale_axb);
+    scale_res = output_7q->s;
+    zero_offset_res = output_7q->z;
+
+    struct Q *output_8q = forward_SpatialBatchNormalization(
+        8, output_7q, 64, 128, 16, 16, scale_axb);
+
+    struct Q *output_9q = forward_ReLU(9, output_8q, 64, 128, 16, 16, scale_axb, scale_res, zero_offset_res);
+
+    struct Q *output_10q = forward_SpatialFullConvolution(
+        10, output_9q, 64, 128, 16, 16, 64, 4, 4, 2, 2, 1, 1, &scale_axb);
+    scale_res = output_10q->s;
+    zero_offset_res = output_10q->z;
+
+    struct Q *output_11q = forward_SpatialBatchNormalization(
+        11, output_10q, 64, 64, 32, 32, scale_axb);
+
+    struct Q *output_12q = forward_ReLU(12, output_11q, 64, 64, 32, 32, scale_axb, scale_res, zero_offset_res);
+
+    free_q(output_12q);
 
     return 0;
 }
