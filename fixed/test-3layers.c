@@ -174,6 +174,20 @@ static void SpatialFullConvolution(
     long n = nOutputPlane * kW * kH;
     long k = nInputPlane;
 
+#if 1
+    // gemm & col2im combined
+    sparse_gemm(
+        m, n, k,
+        input_n, m,
+        weight, n,
+        nOutputPlane,
+        outputHeight, outputWidth,
+        inputHeight, inputWidth,
+        kH, kW, padH, padW, dH, dW,
+        dilationH, dilationW,
+        output_n
+    );
+#else
     // Do GEMM (note: this is a bit confusing because gemm assumes column-major matrices)
     gemm(
         'n', 't',
@@ -193,8 +207,19 @@ static void SpatialFullConvolution(
       dilationH, dilationW,
       output_n
     );
+#endif
 
     // Do Bias after:
+#if 1
+    long output_plane_size = outputWidth * outputHeight;
+
+    for (long j = 0; j < nOutputPlane; j++) {
+        float b = bias[j];
+        for (long k = 0; k < output_plane_size; k++) {
+            output_n[j*output_plane_size + k] += b;
+        }
+    }
+#else
     long m_ = outputHeight * outputWidth;
     long n_ = nOutputPlane;
     long k_ = 1;
@@ -209,6 +234,7 @@ static void SpatialFullConvolution(
         1,
         output_n, m_ // beta == 1: c[j*ldc+i] = beta*c[j*ldc+i]+alpha*sum;
     );
+#endif
   }
 
   free(ones);
