@@ -32,6 +32,8 @@ static int spatial_batch_norm_layer;
 static int spatial_batch_norm_layer_fixed;
 static int relu_layer;
 static int relu_layer_fixed;
+static int tanh_layer;
+//static int tanh_layer_fixed;
 
 static void free_q(struct Q *q)
 {
@@ -594,6 +596,41 @@ static void ReLU_fixed(
     printf("### finished: relu_layer_fixed %i\n", relu_layer_fixed);
 }
 
+static void Tanh(
+  float *input,
+  float *output,
+  long size)
+{
+    tanh_layer++;
+
+    float *p, *q;
+    for (p = input, q = output;
+         p < (input + size) && q < (output + size);
+         p++, q++) {
+        *q = tanhf(*p);
+    }
+    printf("### finished: tanh_layer %i\n", tanh_layer);
+}
+
+#if 0
+static void Tanh_fixed(
+  struct Q *input_q,
+  uint8_t *output,
+  long size)
+{
+    tanh_layer_fixed++;
+
+    int32_t *p;
+    uint8_t *q;
+    for (p = input_q->q32, q = output;
+         p < (input_q->q32 + size) && q < (output + size);
+         p++, q++) {
+        *q = tanhf(*p);
+    }
+    printf("### finished: tanh_layer_fixed %i\n", tanh_layer_fixed);
+}
+#endif
+
 static struct Q *forward_SpatialFullConvolution(
     int layer,
     struct Q *input_q,
@@ -878,6 +915,34 @@ static struct Q *forward_ReLU(
     return output_q;
 }
 
+static struct Q *forward_Tanh(
+    int layer,
+    struct Q *input_q,
+    long batchSize,
+    long nInputPlane,
+    long inputWidth,
+    long inputHeight)
+{
+    printf("\n");
+    char path[256];
+
+    long output_count = batchSize * nInputPlane * inputWidth * inputHeight;
+    float *output = calloc(output_count, sizeof(float));
+
+    Tanh(input_q->f, output, output_count);
+
+    sprintf(path, "../bin/output_%i_test.bin", layer);
+    save_bin(float, path, output, output_count);
+
+    // ----------
+
+    struct Q *output_q = quantize(output, output_count);
+    printf("output_q: min %f max %f scale %f zero_point %i\n", output_q->min, output_q->max, output_q->s, output_q->z);
+
+    free_q(input_q);
+    return output_q;
+}
+
 int main(void)
 {
     float scale_axb = 0.0f; // S_A * S_B
@@ -891,7 +956,6 @@ int main(void)
     struct Q *input_1q = quantize(input_1f, 64 * 100);
     printf("input_1q: min %f max %f scale %f zero_point %i\n", input_1q->min, input_1q->max, input_1q->s, input_1q->z);
 
-    // (64, 100, 1, 1) -> (64, 512, 4, 4)
     struct Q *output_1q = forward_SpatialFullConvolution(
         1, input_1q, 64, 100, 1, 1, 512, 4, 4, 1, 1, 0, 0, &scale_axb);
     scale_res = output_1q->s;
@@ -899,12 +963,9 @@ int main(void)
 
     // output_1q->q is the quantized values from output_1q->f
     // output_1q->q32 is the actual output of SpatialFullConvolution_fixed
-    //
-    // (64, 512, 4, 4) -> (64, 512, 4, 4)
     struct Q *output_2q = forward_SpatialBatchNormalization(
         2, output_1q, 64, 512, 4, 4, scale_axb);
 
-    // (64, 512, 4, 4) -> (64, 512, 4, 4)
     struct Q *output_3q = forward_ReLU(3, output_2q, 64, 512, 4, 4, scale_axb, scale_res, zero_offset_res);
 
     struct Q *output_4q = forward_SpatialFullConvolution(
@@ -937,7 +998,12 @@ int main(void)
 
     struct Q *output_12q = forward_ReLU(12, output_11q, 64, 64, 32, 32, scale_axb, scale_res, zero_offset_res);
 
-    free_q(output_12q);
+    struct Q *output_13q = forward_SpatialFullConvolution(
+        13, output_12q, 64, 64, 32, 32, 3, 4, 4, 2, 2, 1, 1, &scale_axb);
+
+    struct Q *output_14q = forward_Tanh(14, output_13q, 64, 3, 64, 64);
+
+    free_q(output_14q);
 
     return 0;
 }
